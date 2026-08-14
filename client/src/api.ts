@@ -28,10 +28,29 @@ export async function checkSystem(): Promise<SystemStatus> {
     throw new Error("Invalid health response");
   }
 
+  const categoriesResponse = await fetch(`${API_URL}/api/categories`);
+  if (!categoriesResponse.ok) {
+    throw new Error(`Category request failed (${categoriesResponse.status})`);
+  }
+
+  const categories = (await categoriesResponse.json()) as unknown;
+  if (
+    !Array.isArray(categories) ||
+    categories.some(
+      (category) =>
+        typeof category !== "object" ||
+        category === null ||
+        typeof (category as Category).id !== "number" ||
+        typeof (category as Category).name !== "string",
+    )
+  ) {
+    throw new Error("Invalid categories response");
+  }
+
   return {
     online: true,
     status: health.status,
     service: health.service,
-    categories: [],
+    categories,
   };
 }
