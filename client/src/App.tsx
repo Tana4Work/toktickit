@@ -7,7 +7,6 @@ type UiState = "idle" | "loading" | "success" | "error";
 export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
-  void categories;
 
   async function handleCheck() {
     setState("loading");
@@ -15,7 +14,7 @@ export default function App() {
       const result = await checkSystem();
       setCategories(result.categories);
       setState("success");
-    } catch (error) {
+    } catch {
       setState("error");
       setCategories([]);
     }
@@ -36,17 +35,15 @@ export default function App() {
       {state === "success" && (
         <div className="mt-4">
           <p className="text-success fw-semibold">System Status: Online</p>
-          {categories.length > 0 && (
-            <ul>
-              {categories.map((category) => <li key={category.id}>{category.name}</li>)}
-            </ul>
-          )}
+          <ul aria-label="Categories">
+            {categories.map((category) => <li key={category.id}>{category.name}</li>)}
+          </ul>
         </div>
       )}
 
       {state === "error" && (
         <p className="mt-4 text-danger" role="alert">
-          System Status: Offline
+          System Status: Offline. Unable to reach the service desk API. Please try again.
         </p>
       )}
     </div>

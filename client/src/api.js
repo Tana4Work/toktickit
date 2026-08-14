@@ -13,10 +13,22 @@ export async function checkSystem() {
     if (health.status !== "ok" || !health.service) {
         throw new Error("Invalid health response");
     }
+    const categoriesResponse = await fetch(`${API_URL}/api/categories`);
+    if (!categoriesResponse.ok) {
+        throw new Error(`Category request failed (${categoriesResponse.status})`);
+    }
+    const categories = (await categoriesResponse.json());
+    if (!Array.isArray(categories) ||
+        categories.some((category) => typeof category !== "object" ||
+            category === null ||
+            typeof category.id !== "number" ||
+            typeof category.name !== "string")) {
+        throw new Error("Invalid categories response");
+    }
     return {
         online: true,
         status: health.status,
         service: health.service,
-        categories: [],
+        categories,
     };
 }
