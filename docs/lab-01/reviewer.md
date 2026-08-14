@@ -26,8 +26,8 @@ Reviewer comment I received: I've checked this PR. No problem at all.
 How I responded: thanks
 
 PR#8
-Reviewer comment: 
-How I responded: 
+Reviewer comment: I've checked this PR. Very good job no problem at all.
+How I responded: thanks
 
 ## Pull Requests I reviewed for my partner - Siripitch Chaiyabutra - 67070503440 - Github: @siripitch-c (I review/comment)
 
