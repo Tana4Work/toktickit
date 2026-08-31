@@ -5,6 +5,43 @@ export interface Category {
   name: string;
 }
 
+export interface DevelopmentRequester {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface RelatedSystem {
+  id: number;
+  name: string;
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`);
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return (await response.json()) as T;
+}
+
+export async function fetchDevelopmentRequesters(): Promise<DevelopmentRequester[]> {
+  const requesters = await fetchJson<unknown>("/api/requesters");
+  if (!Array.isArray(requesters) || requesters.some((item) => {
+    if (typeof item !== "object" || item === null) return true;
+    const requester = item as Partial<DevelopmentRequester>;
+    return typeof requester.id !== "number" || typeof requester.name !== "string" || typeof requester.email !== "string";
+  })) throw new Error("Invalid requester response");
+  return requesters as DevelopmentRequester[];
+}
+
+export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
+  const systems = await fetchJson<unknown>("/api/related-systems");
+  if (!Array.isArray(systems) || systems.some((item) => {
+    if (typeof item !== "object" || item === null) return true;
+    const system = item as Partial<RelatedSystem>;
+    return typeof system.id !== "number" || typeof system.name !== "string";
+  })) throw new Error("Invalid related systems response");
+  return systems as RelatedSystem[];
+}
+
 export interface SystemStatus {
   online: boolean;
   status: string;
