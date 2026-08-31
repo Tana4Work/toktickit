@@ -3,7 +3,7 @@
 ## Conventions
 
 - Base URL: `/api`
-- JSON responses use `{ "data": ... }` for successful resource responses and `{ "error": { "code": "...", "message": "..." } }` for safe errors unless an endpoint below states a different shape.
+- Existing Lab 1 and reference-data endpoints return successful collections as raw JSON arrays for backward compatibility. New resource endpoints may use `{ "data": ... }` when explicitly documented. Safe errors use `{ "error": { "code": "...", "message": "..." } }` or the existing Lab 1 `{ "error": "..." }` shape until the API contract is versioned.
 - IDs are positive integers. Dates are ISO-8601 strings in UTC.
 - The selected requester context is supplied as `requesterId` for Lab 2 testing. It is not authentication.
 - List endpoints use `page` starting at 1 and `pageSize` from the allowed set `[10, 25, 50]`; default `page=1&pageSize=10`.
@@ -12,9 +12,9 @@
 
 | Method | Path | Purpose | Success |
 |---|---|---|---|
-| GET | `/categories` | Retrieve active Categories | `200 { data: [{ id, name }] }` |
-| GET | `/related-systems` | Retrieve active Related Systems | `200 { data: [{ id, name }] }` |
-| GET | `/requesters` | Retrieve active Development Requesters | `200 { data: [{ id, name, email }] }` |
+| GET | `/categories` | Retrieve active Categories | `200 [{ id, name }]` |
+| GET | `/related-systems` | Retrieve active Related Systems | `200 [{ id, name }]` |
+| GET | `/requesters` | Retrieve active Development Requesters | `200 [{ id, name, email }]` |
 
 Reference-data failures return `500` with a safe message. Inactive records are never returned by these selector endpoints.
 

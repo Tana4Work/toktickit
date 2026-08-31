@@ -1,4 +1,32 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+async function fetchJson(path) {
+    const response = await fetch(`${API_URL}${path}`);
+    if (!response.ok)
+        throw new Error(`Request failed (${response.status})`);
+    return (await response.json());
+}
+export async function fetchDevelopmentRequesters() {
+    const requesters = await fetchJson("/api/requesters");
+    if (!Array.isArray(requesters) || requesters.some((item) => {
+        if (typeof item !== "object" || item === null)
+            return true;
+        const requester = item;
+        return typeof requester.id !== "number" || typeof requester.name !== "string" || typeof requester.email !== "string";
+    }))
+        throw new Error("Invalid requester response");
+    return requesters;
+}
+export async function fetchRelatedSystems() {
+    const systems = await fetchJson("/api/related-systems");
+    if (!Array.isArray(systems) || systems.some((item) => {
+        if (typeof item !== "object" || item === null)
+            return true;
+        const system = item;
+        return typeof system.id !== "number" || typeof system.name !== "string";
+    }))
+        throw new Error("Invalid related systems response");
+    return systems;
+}
 // Issue 2 + Issue 4 — call the backend.
 // Steps: fetch `${API_URL}/api/health`; if not ok, throw.
 //        then fetch `${API_URL}/api/categories`; if not ok, throw.
