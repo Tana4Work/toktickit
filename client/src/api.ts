@@ -16,6 +16,26 @@ export interface RelatedSystem {
   name: string;
 }
 
+export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+export interface CreateTicketInput {
+  requesterId: number;
+  categoryId: number;
+  relatedSystemId: number;
+  summary: string;
+  requestedPriority: TicketPriority;
+  description: string;
+}
+
+export interface CreatedTicket extends CreateTicketInput {
+  id: number;
+  ticketNumber: string;
+  ticketDate: string;
+  currentStatus: "New";
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`);
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
@@ -40,6 +60,28 @@ export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
     return typeof system.id !== "number" || typeof system.name !== "string";
   })) throw new Error("Invalid related systems response");
   return systems as RelatedSystem[];
+}
+
+export async function fetchCategories(): Promise<Category[]> {
+  return fetchJson<Category[]>("/api/categories");
+}
+
+export async function createTicket(input: CreateTicketInput, idempotencyKey: string): Promise<CreatedTicket> {
+  const response = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    const message = typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string"
+      ? payload.error : "Unable to create ticket.";
+    throw new Error(message);
+  }
+  if (typeof payload !== "object" || payload === null || typeof (payload as CreatedTicket).ticketNumber !== "string") {
+    throw new Error("Invalid ticket response");
+  }
+  return payload as CreatedTicket;
 }
 
 export interface SystemStatus {

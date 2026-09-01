@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { checkSystem, fetchDevelopmentRequesters } from "./api.js";
 import { useRequester } from "./requesterContext.js";
+import CreateTicket from "./CreateTicket.js";
 export default function App() {
     const [state, setState] = useState("idle");
     const [categories, setCategories] = useState([]);
@@ -41,5 +42,5 @@ export default function App() {
                                         selectRequester(requester);
                                         setSelectionConfirmed(false);
                                     }
-                                }, children: [_jsx("option", { value: "", children: "Select a Requester" }), requesters.map((requester) => _jsxs("option", { value: requester.id, children: [requester.name, " (", requester.email, ")"] }, requester.id))] }), _jsx("button", { className: "btn btn-success mt-3", disabled: !currentRequester, onClick: () => setSelectionConfirmed(true), children: "Continue" })] })), selectionConfirmed && currentRequester && _jsxs("div", { className: "mt-3", role: "status", children: [_jsxs("p", { className: "text-success", children: ["Current testing Requester: ", currentRequester.name] }), _jsx("button", { className: "btn btn-link px-0", onClick: () => { clearRequester(); setSelectionConfirmed(false); }, children: "Change Requester" })] })] })] }));
+                                }, children: [_jsx("option", { value: "", children: "Select a Requester" }), requesters.map((requester) => _jsxs("option", { value: requester.id, children: [requester.name, " (", requester.email, ")"] }, requester.id))] }), _jsx("button", { className: "btn btn-success mt-3", disabled: !currentRequester, onClick: () => setSelectionConfirmed(true), children: "Continue" })] })), selectionConfirmed && currentRequester && _jsxs("div", { className: "mt-3", role: "status", children: [_jsxs("p", { className: "text-success", children: ["Current testing Requester: ", currentRequester.name] }), _jsx("button", { className: "btn btn-link px-0", onClick: () => { clearRequester(); setSelectionConfirmed(false); }, children: "Change Requester" })] })] }), selectionConfirmed && _jsx(CreateTicket, {})] }));
 }

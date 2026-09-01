@@ -37,7 +37,7 @@ Request:
 }
 ```
 
-The backend validates the requester and active reference IDs, trims text, validates required fields and priority, generates `ticketNumber`, `ticketDate`, and `currentStatus`, and persists the Ticket. The response is `201` with the saved Ticket:
+The backend validates the requester and active reference IDs, trims text, validates Summary (3-120 characters), Description (10-2000 characters), and priority (`LOW`, `MEDIUM`, `HIGH`, or `URGENT`), generates `ticketNumber`, `ticketDate`, and `currentStatus`, and persists the Ticket. The response is `201` with the saved Ticket as a JSON object:
 
 ```json
 {

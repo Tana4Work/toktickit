@@ -27,6 +27,26 @@ export async function fetchRelatedSystems() {
         throw new Error("Invalid related systems response");
     return systems;
 }
+export async function fetchCategories() {
+    return fetchJson("/api/categories");
+}
+export async function createTicket(input, idempotencyKey) {
+    const response = await fetch(`${API_URL}/api/tickets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(input),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+        const message = typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string"
+            ? payload.error : "Unable to create ticket.";
+        throw new Error(message);
+    }
+    if (typeof payload !== "object" || payload === null || typeof payload.ticketNumber !== "string") {
+        throw new Error("Invalid ticket response");
+    }
+    return payload;
+}
 // Issue 2 + Issue 4 — call the backend.
 // Steps: fetch `${API_URL}/api/health`; if not ok, throw.
 //        then fetch `${API_URL}/api/categories`; if not ok, throw.
