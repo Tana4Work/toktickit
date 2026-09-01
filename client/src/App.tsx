@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { checkSystem, Category, DevelopmentRequester, fetchDevelopmentRequesters } from "./api.js";
 import { useRequester } from "./requesterContext.js";
+import CreateTicket from "./CreateTicket.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
@@ -93,6 +94,7 @@ export default function App() {
         )}
         {selectionConfirmed && currentRequester && <div className="mt-3" role="status"><p className="text-success">Current testing Requester: {currentRequester.name}</p><button className="btn btn-link px-0" onClick={() => { clearRequester(); setSelectionConfirmed(false); }}>Change Requester</button></div>}
       </section>
+      {selectionConfirmed && <CreateTicket />}
     </div>
   );
 }

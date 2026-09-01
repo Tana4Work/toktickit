@@ -65,8 +65,8 @@ The IT department needs a professional service-desk experience for end users. A 
 - BR-07: A Ticket belongs to exactly one Requester, Category, and Related System.
 - BR-08: A Requester may retrieve only their own Tickets and Attachments.
 - BR-09: Missing, inactive, or invalid reference-data IDs are rejected by the backend.
-- BR-10: Summary and Description are required; exact length limits and trimming rules must be recorded in this document before implementation.
-- BR-11: Requested Priority must be one of the documented allowed values.
+- BR-10: Summary is required after trimming and must be 3-120 characters; Description is required after trimming and must be 10-2000 characters.
+- BR-11: Requested Priority must be one of `LOW`, `MEDIUM`, `HIGH`, or `URGENT`.
 - BR-12: Client validation is for usability; server validation is authoritative.
 - BR-13: A failed create operation must not leave a partially persisted Ticket unless the documented compensation strategy is applied.
 - BR-14: A repeated client submission must not create duplicate Tickets for the same logical operation.
@@ -141,7 +141,7 @@ The detailed endpoint contract is in `api-spec.md`. Required capabilities are ac
 ## 11. Assumptions and Decisions
 
 - Lab 1 Categories remain the source of the four required category records.
-- The exact Summary/Description limits, priority values, list query names, page sizes, storage adapter, and attachment removal-reason wording are design decisions to be reviewed and recorded before implementation.
+- Summary/Description limits are 3-120 and 10-2000 characters; priority values are `LOW`, `MEDIUM`, `HIGH`, and `URGENT`. List query names and page sizes are defined in `api-spec.md`; storage and attachment removal-reason wording remain for Issue 6.
 - Ticket creation and attachment upload may be separate API operations. The approved compensation behavior is the Ticket remains saved when a later attachment upload fails, with no false active attachment metadata.
 - A local/private storage adapter is acceptable for Lab 2 if its generated keys, safe filenames, and download authorization are documented; cloud storage is not required.
 - The selected Requester ID is a client testing context and must be passed/validated consistently in the API contract; it is not proof of identity.
