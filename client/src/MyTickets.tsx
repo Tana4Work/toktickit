@@ -3,9 +3,10 @@ import { fetchCategories, fetchRelatedSystems, fetchTickets, Category, RelatedSy
 import { useRequester } from "./requesterContext.js";
 
 type Filters = { search: string; categoryId: string; relatedSystemId: string; requestedPriority: string; status: string; sortBy: string; sortDirection: "asc" | "desc" };
+type MyTicketsProps = { onOpenTicket: (ticketId: number) => void };
 const initialFilters: Filters = { search: "", categoryId: "", relatedSystemId: "", requestedPriority: "", status: "", sortBy: "updatedAt", sortDirection: "desc" };
 
-export default function MyTickets() {
+export default function MyTickets({ onOpenTicket }: MyTicketsProps) {
   const { currentRequester } = useRequester();
   const [filters, setFilters] = useState(initialFilters);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -56,7 +57,7 @@ export default function MyTickets() {
       <div className="col-md-4"><label className="form-label" htmlFor="ticket-sort-direction">Direction</label><select id="ticket-sort-direction" className="form-select" value={filters.sortDirection} onChange={(e) => update("sortDirection", e.target.value as "asc" | "desc")}><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
     </div>
     <button className="btn btn-outline-secondary mb-3" onClick={clearFilters}>Clear Filters</button>
-    {tickets.length === 0 ? <p role="status">{Object.values(filters).some(Boolean) ? "No tickets match the selected filters." : "You have no tickets yet."}</p> : <div className="table-responsive"><table className="table align-middle"><caption className="visually-hidden">Tickets owned by {currentRequester.name}</caption><thead><tr><th>Ticket Number</th><th>Summary</th><th>Category</th><th>Related System</th><th>Priority</th><th>Status</th><th>Date</th></tr></thead><tbody>{tickets.map((ticket) => <tr key={ticket.id}><td>{ticket.ticketNumber}</td><td>{ticket.summary}</td><td>{ticket.category.name}</td><td>{ticket.relatedSystem.name}</td><td>{ticket.requestedPriority}</td><td>{ticket.currentStatus}</td><td>{new Date(ticket.ticketDate).toLocaleDateString()}</td></tr>)}</tbody></table></div>}
+    {tickets.length === 0 ? <p role="status">{Object.values(filters).some(Boolean) ? "No tickets match the selected filters." : "You have no tickets yet."}</p> : <div className="table-responsive"><table className="table align-middle"><caption className="visually-hidden">Tickets owned by {currentRequester.name}</caption><thead><tr><th>Ticket Number</th><th>Summary</th><th>Category</th><th>Related System</th><th>Priority</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody>{tickets.map((ticket) => <tr key={ticket.id}><td>{ticket.ticketNumber}</td><td>{ticket.summary}</td><td>{ticket.category.name}</td><td>{ticket.relatedSystem.name}</td><td>{ticket.requestedPriority}</td><td>{ticket.currentStatus}</td><td>{new Date(ticket.ticketDate).toLocaleDateString()}</td><td><button className="btn btn-sm btn-outline-success" onClick={() => onOpenTicket(ticket.id)}>View Details</button></td></tr>)}</tbody></table></div>}
     {pagination && pagination.totalPages > 0 && <nav aria-label="Ticket pages" className="d-flex align-items-center justify-content-between"><span>Page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} tickets)</span><div className="d-flex gap-2"><button className="btn btn-outline-success" disabled={pagination.page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button className="btn btn-outline-success" disabled={pagination.page >= pagination.totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div></nav>}
   </section>;
 }

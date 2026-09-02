@@ -3,6 +3,7 @@ import { checkSystem, Category, DevelopmentRequester, fetchDevelopmentRequesters
 import { useRequester } from "./requesterContext.js";
 import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
+import TicketDetail from "./TicketDetail.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
@@ -14,6 +15,7 @@ export default function App() {
   const [requesterState, setRequesterState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [selectionConfirmed, setSelectionConfirmed] = useState(false);
   const [activePage, setActivePage] = useState<"create" | "tickets">("create");
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const { currentRequester, selectRequester, clearRequester } = useRequester();
 
   async function loadRequesters() {
@@ -85,7 +87,7 @@ export default function App() {
               const requester = requesters.find((item) => String(item.id) === event.target.value);
               if (requester) {
                 selectRequester(requester);
-                setSelectionConfirmed(false);
+                setSelectionConfirmed(false); setSelectedTicketId(null);
               }
             }}>
               <option value="">Select a Requester</option>
@@ -97,11 +99,12 @@ export default function App() {
         {selectionConfirmed && currentRequester && <div className="mt-3" role="status"><p className="text-success">Current testing Requester: {currentRequester.name}</p><button className="btn btn-link px-0" onClick={() => { clearRequester(); setSelectionConfirmed(false); setActivePage("create"); }}>Change Requester</button></div>}
       </section>
       {selectionConfirmed && currentRequester && <nav className="mt-4 d-flex gap-2" aria-label="Ticket navigation">
-        <button className={`btn ${activePage === "tickets" ? "btn-success" : "btn-outline-success"}`} onClick={() => setActivePage("tickets")}>My Tickets</button>
+        <button className={`btn ${activePage === "tickets" ? "btn-success" : "btn-outline-success"}`} onClick={() => { setActivePage("tickets"); setSelectedTicketId(null); }}>My Tickets</button>
         <button className={`btn ${activePage === "create" ? "btn-success" : "btn-outline-success"}`} onClick={() => setActivePage("create")}>Create Ticket</button>
       </nav>}
       {selectionConfirmed && currentRequester && activePage === "create" && <CreateTicket />}
-      {selectionConfirmed && currentRequester && activePage === "tickets" && <MyTickets />}
+      {selectionConfirmed && currentRequester && activePage === "tickets" && !selectedTicketId && <MyTickets onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)} />}
+      {selectionConfirmed && currentRequester && activePage === "tickets" && selectedTicketId && <TicketDetail ticketId={selectedTicketId} onBack={() => setSelectedTicketId(null)} />}
     </div>
   );
 }

@@ -50,6 +50,9 @@ export async function createTicket(input, idempotencyKey) {
 export async function fetchTickets(params) {
     return fetchJson(`/api/tickets?${params.toString()}`);
 }
+export async function fetchTicket(ticketId, requesterId) {
+    return fetchJson(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
+}
 // Issue 2 + Issue 4 — call the backend.
 // Steps: fetch `${API_URL}/api/health`; if not ok, throw.
 //        then fetch `${API_URL}/api/categories`; if not ok, throw.
