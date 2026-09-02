@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { createHash } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
 // getPrisma() is your lazy database handle. Call it INSIDE a route when you
 // need the DB (Issue 4). It is intentionally unused until then.
@@ -162,6 +163,74 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
       return;
     }
     res.status(500).json({ error: "Unable to create ticket." });
+  }
+});
+
+const TICKET_SORT_FIELDS = ["ticketDate", "ticketNumber", "summary", "requestedPriority", "currentStatus", "updatedAt"] as const;
+type TicketSortField = (typeof TICKET_SORT_FIELDS)[number];
+
+function queryString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+app.get("/api/tickets", async (req: Request, res: Response) => {
+  const requesterId = Number(queryString(req.query.requesterId));
+  const search = queryString(req.query.search)?.trim() ?? "";
+  const categoryId = queryString(req.query.categoryId);
+  const relatedSystemId = queryString(req.query.relatedSystemId);
+  const requestedPriority = queryString(req.query.requestedPriority);
+  const status = queryString(req.query.status);
+  const sortBy = queryString(req.query.sortBy) ?? "updatedAt";
+  const sortDirection = queryString(req.query.sortDirection) ?? "desc";
+  const page = Number(queryString(req.query.page) ?? "1");
+  const pageSize = Number(queryString(req.query.pageSize) ?? "10");
+
+  const parsedCategoryId = categoryId === undefined ? undefined : Number(categoryId);
+  const parsedRelatedSystemId = relatedSystemId === undefined ? undefined : Number(relatedSystemId);
+  const validPriority = requestedPriority === undefined || ALLOWED_PRIORITIES.includes(requestedPriority as (typeof ALLOWED_PRIORITIES)[number]);
+  const validStatus = status === undefined || status === "New";
+  const validSort = TICKET_SORT_FIELDS.includes(sortBy as TicketSortField);
+  const validDirection = sortDirection === "asc" || sortDirection === "desc";
+
+  if (!Number.isInteger(requesterId) || requesterId < 1 ||
+      (parsedCategoryId !== undefined && (!Number.isInteger(parsedCategoryId) || parsedCategoryId < 1)) ||
+      (parsedRelatedSystemId !== undefined && (!Number.isInteger(parsedRelatedSystemId) || parsedRelatedSystemId < 1)) ||
+      !validPriority || !validStatus || !validSort || !validDirection ||
+      !Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    res.status(400).json({ error: "Invalid ticket list query." });
+    return;
+  }
+
+  const where: Prisma.TicketWhereInput = {
+    requesterId,
+    ...(search ? { OR: [{ ticketNumber: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }] } : {}),
+    ...(parsedCategoryId === undefined ? {} : { categoryId: parsedCategoryId }),
+    ...(parsedRelatedSystemId === undefined ? {} : { relatedSystemId: parsedRelatedSystemId }),
+    ...(requestedPriority === undefined ? {} : { requestedPriority: requestedPriority as (typeof ALLOWED_PRIORITIES)[number] }),
+    ...(status === undefined ? {} : { currentStatus: "New" }),
+  };
+  const orderBy = [{ [sortBy]: sortDirection }, { id: "asc" }] as Prisma.TicketOrderByWithRelationInput[];
+
+  try {
+    const prisma = getPrisma();
+    const [totalItems, tickets] = await prisma.$transaction([
+      prisma.ticket.count({ where }),
+      prisma.ticket.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true, ticketNumber: true, summary: true, requestedPriority: true,
+          currentStatus: true, ticketDate: true, updatedAt: true,
+          category: { select: { id: true, name: true } },
+          relatedSystem: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
+    res.status(200).json({ data: tickets, pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } });
+  } catch {
+    res.status(500).json({ error: "Unable to load tickets." });
   }
 });
 

@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { checkSystem, fetchDevelopmentRequesters } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 import CreateTicket from "./CreateTicket.js";
+import MyTickets from "./MyTickets.js";
 export default function App() {
     const [state, setState] = useState("idle");
     const [categories, setCategories] = useState([]);
     const [requesters, setRequesters] = useState([]);
     const [requesterState, setRequesterState] = useState("idle");
     const [selectionConfirmed, setSelectionConfirmed] = useState(false);
+    const [activePage, setActivePage] = useState("create");
     const { currentRequester, selectRequester, clearRequester } = useRequester();
     async function loadRequesters() {
         setRequesterState("loading");
@@ -42,5 +44,5 @@ export default function App() {
                                         selectRequester(requester);
                                         setSelectionConfirmed(false);
                                     }
-                                }, children: [_jsx("option", { value: "", children: "Select a Requester" }), requesters.map((requester) => _jsxs("option", { value: requester.id, children: [requester.name, " (", requester.email, ")"] }, requester.id))] }), _jsx("button", { className: "btn btn-success mt-3", disabled: !currentRequester, onClick: () => setSelectionConfirmed(true), children: "Continue" })] })), selectionConfirmed && currentRequester && _jsxs("div", { className: "mt-3", role: "status", children: [_jsxs("p", { className: "text-success", children: ["Current testing Requester: ", currentRequester.name] }), _jsx("button", { className: "btn btn-link px-0", onClick: () => { clearRequester(); setSelectionConfirmed(false); }, children: "Change Requester" })] })] }), selectionConfirmed && _jsx(CreateTicket, {})] }));
+                                }, children: [_jsx("option", { value: "", children: "Select a Requester" }), requesters.map((requester) => _jsxs("option", { value: requester.id, children: [requester.name, " (", requester.email, ")"] }, requester.id))] }), _jsx("button", { className: "btn btn-success mt-3", disabled: !currentRequester, onClick: () => setSelectionConfirmed(true), children: "Continue" })] })), selectionConfirmed && currentRequester && _jsxs("div", { className: "mt-3", role: "status", children: [_jsxs("p", { className: "text-success", children: ["Current testing Requester: ", currentRequester.name] }), _jsx("button", { className: "btn btn-link px-0", onClick: () => { clearRequester(); setSelectionConfirmed(false); setActivePage("create"); }, children: "Change Requester" })] })] }), selectionConfirmed && currentRequester && _jsxs("nav", { className: "mt-4 d-flex gap-2", "aria-label": "Ticket navigation", children: [_jsx("button", { className: `btn ${activePage === "tickets" ? "btn-success" : "btn-outline-success"}`, onClick: () => setActivePage("tickets"), children: "My Tickets" }), _jsx("button", { className: `btn ${activePage === "create" ? "btn-success" : "btn-outline-success"}`, onClick: () => setActivePage("create"), children: "Create Ticket" })] }), selectionConfirmed && currentRequester && activePage === "create" && _jsx(CreateTicket, {}), selectionConfirmed && currentRequester && activePage === "tickets" && _jsx(MyTickets, {})] }));
 }
