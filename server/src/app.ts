@@ -234,4 +234,34 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/tickets/:ticketId", async (req: Request, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  const requesterId = Number(queryString(req.query.requesterId));
+  if (!Number.isInteger(ticketId) || ticketId < 1 || !Number.isInteger(requesterId) || requesterId < 1) {
+    res.status(400).json({ error: "Invalid ticket or requester ID." });
+    return;
+  }
+
+  try {
+    const ticket = await getPrisma().ticket.findFirst({
+      where: { id: ticketId, requesterId },
+      select: {
+        id: true, ticketNumber: true, ticketDate: true, summary: true, description: true,
+        requestedPriority: true, currentStatus: true, createdAt: true, updatedAt: true,
+        requester: { select: { id: true, name: true, email: true } },
+        category: { select: { id: true, name: true } },
+        relatedSystem: { select: { id: true, name: true } },
+        attachments: { orderBy: { createdAt: "asc" }, select: { id: true, originalName: true, mimeType: true, sizeBytes: true, createdAt: true, removedAt: true, removalReason: true } },
+      },
+    });
+    if (!ticket) {
+      res.status(404).json({ error: "Ticket not found." });
+      return;
+    }
+    res.status(200).json(ticket);
+  } catch {
+    res.status(500).json({ error: "Unable to load ticket." });
+  }
+});
+
 export default app;

@@ -53,6 +53,24 @@ export interface TicketListResponse {
   pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }
 
+export interface TicketAttachmentMetadata {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  removedAt: string | null;
+  removalReason: string | null;
+}
+
+export interface TicketDetail extends TicketListItem {
+  ticketDate: string;
+  description: string;
+  createdAt: string;
+  requester: DevelopmentRequester;
+  attachments: TicketAttachmentMetadata[];
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`);
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
@@ -103,6 +121,10 @@ export async function createTicket(input: CreateTicketInput, idempotencyKey: str
 
 export async function fetchTickets(params: URLSearchParams): Promise<TicketListResponse> {
   return fetchJson<TicketListResponse>(`/api/tickets?${params.toString()}`);
+}
+
+export async function fetchTicket(ticketId: number, requesterId: number): Promise<TicketDetail> {
+  return fetchJson<TicketDetail>(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
 }
 
 export interface SystemStatus {

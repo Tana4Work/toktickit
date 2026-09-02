@@ -60,6 +60,22 @@ model Ticket {
   category           Category             @relation(fields: [categoryId], references: [id])
   requester          DevelopmentRequester @relation(fields: [requesterId], references: [id])
   relatedSystem      RelatedSystem        @relation(fields: [relatedSystemId], references: [id])
+  attachments        Attachment[]
+}
+
+model Attachment {
+  id             Int       @id @default(autoincrement())
+  ticketId       Int
+  originalName   String
+  storageKey     String
+  mimeType       String
+  sizeBytes      Int
+  createdAt      DateTime  @default(now())
+  removedAt      DateTime?
+  removalReason  String?
+  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, removedAt])
 }
 
 enum TicketPriority {
