@@ -36,6 +36,23 @@ export interface CreatedTicket extends CreateTicketInput {
   updatedAt: string;
 }
 
+export interface TicketListItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  category: Category;
+  relatedSystem: RelatedSystem;
+  requestedPriority: TicketPriority;
+  currentStatus: "New";
+  ticketDate: string;
+  updatedAt: string;
+}
+
+export interface TicketListResponse {
+  data: TicketListItem[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`);
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
@@ -82,6 +99,10 @@ export async function createTicket(input: CreateTicketInput, idempotencyKey: str
     throw new Error("Invalid ticket response");
   }
   return payload as CreatedTicket;
+}
+
+export async function fetchTickets(params: URLSearchParams): Promise<TicketListResponse> {
+  return fetchJson<TicketListResponse>(`/api/tickets?${params.toString()}`);
 }
 
 export interface SystemStatus {

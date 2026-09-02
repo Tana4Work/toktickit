@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { checkSystem, Category, DevelopmentRequester, fetchDevelopmentRequesters } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 import CreateTicket from "./CreateTicket.js";
+import MyTickets from "./MyTickets.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
@@ -12,6 +13,7 @@ export default function App() {
   const [requesters, setRequesters] = useState<DevelopmentRequester[]>([]);
   const [requesterState, setRequesterState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [selectionConfirmed, setSelectionConfirmed] = useState(false);
+  const [activePage, setActivePage] = useState<"create" | "tickets">("create");
   const { currentRequester, selectRequester, clearRequester } = useRequester();
 
   async function loadRequesters() {
@@ -92,9 +94,14 @@ export default function App() {
             <button className="btn btn-success mt-3" disabled={!currentRequester} onClick={() => setSelectionConfirmed(true)}>Continue</button>
           </div>
         )}
-        {selectionConfirmed && currentRequester && <div className="mt-3" role="status"><p className="text-success">Current testing Requester: {currentRequester.name}</p><button className="btn btn-link px-0" onClick={() => { clearRequester(); setSelectionConfirmed(false); }}>Change Requester</button></div>}
+        {selectionConfirmed && currentRequester && <div className="mt-3" role="status"><p className="text-success">Current testing Requester: {currentRequester.name}</p><button className="btn btn-link px-0" onClick={() => { clearRequester(); setSelectionConfirmed(false); setActivePage("create"); }}>Change Requester</button></div>}
       </section>
-      {selectionConfirmed && <CreateTicket />}
+      {selectionConfirmed && currentRequester && <nav className="mt-4 d-flex gap-2" aria-label="Ticket navigation">
+        <button className={`btn ${activePage === "tickets" ? "btn-success" : "btn-outline-success"}`} onClick={() => setActivePage("tickets")}>My Tickets</button>
+        <button className={`btn ${activePage === "create" ? "btn-success" : "btn-outline-success"}`} onClick={() => setActivePage("create")}>Create Ticket</button>
+      </nav>}
+      {selectionConfirmed && currentRequester && activePage === "create" && <CreateTicket />}
+      {selectionConfirmed && currentRequester && activePage === "tickets" && <MyTickets />}
     </div>
   );
 }
