@@ -53,6 +53,25 @@ export async function fetchTickets(params) {
 export async function fetchTicket(ticketId, requesterId) {
     return fetchJson(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
 }
+export async function uploadAttachment(ticketId, requesterId, file) {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", body: form });
+    const payload = await response.json();
+    if (!response.ok)
+        throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to upload attachment.");
+    return payload;
+}
+export async function removeAttachment(attachmentId, requesterId, reason) {
+    const response = await fetch(`${API_URL}/api/attachments/${attachmentId}?requesterId=${requesterId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+    const payload = await response.json();
+    if (!response.ok)
+        throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to remove attachment.");
+    return payload;
+}
+export function attachmentDownloadUrl(attachmentId, requesterId) {
+    return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
 // Issue 2 + Issue 4 — call the backend.
 // Steps: fetch `${API_URL}/api/health`; if not ok, throw.
 //        then fetch `${API_URL}/api/categories`; if not ok, throw.
