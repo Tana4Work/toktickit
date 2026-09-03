@@ -127,6 +127,25 @@ export async function fetchTicket(ticketId: number, requesterId: number): Promis
   return fetchJson<TicketDetail>(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
 }
 
+export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {
+  const form = new FormData(); form.append("file", file);
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", body: form });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to upload attachment.");
+  return payload as TicketAttachmentMetadata;
+}
+
+export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<TicketAttachmentMetadata> {
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}?requesterId=${requesterId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to remove attachment.");
+  return payload as TicketAttachmentMetadata;
+}
+
+export function attachmentDownloadUrl(attachmentId: number, requesterId: number) {
+  return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
+
 export interface SystemStatus {
   online: boolean;
   status: string;
