@@ -5,6 +5,147 @@ export interface Category {
   name: string;
 }
 
+export interface DevelopmentRequester {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface RelatedSystem {
+  id: number;
+  name: string;
+}
+
+export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+export interface CreateTicketInput {
+  requesterId: number;
+  categoryId: number;
+  relatedSystemId: number;
+  summary: string;
+  requestedPriority: TicketPriority;
+  description: string;
+}
+
+export interface CreatedTicket extends CreateTicketInput {
+  id: number;
+  ticketNumber: string;
+  ticketDate: string;
+  currentStatus: "New";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketListItem {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  category: Category;
+  relatedSystem: RelatedSystem;
+  requestedPriority: TicketPriority;
+  currentStatus: "New";
+  ticketDate: string;
+  updatedAt: string;
+}
+
+export interface TicketListResponse {
+  data: TicketListItem[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+export interface TicketAttachmentMetadata {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  removedAt: string | null;
+  removalReason: string | null;
+}
+
+export interface TicketDetail extends TicketListItem {
+  ticketDate: string;
+  description: string;
+  createdAt: string;
+  requester: DevelopmentRequester;
+  attachments: TicketAttachmentMetadata[];
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`);
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return (await response.json()) as T;
+}
+
+export async function fetchDevelopmentRequesters(): Promise<DevelopmentRequester[]> {
+  const requesters = await fetchJson<unknown>("/api/requesters");
+  if (!Array.isArray(requesters) || requesters.some((item) => {
+    if (typeof item !== "object" || item === null) return true;
+    const requester = item as Partial<DevelopmentRequester>;
+    return typeof requester.id !== "number" || typeof requester.name !== "string" || typeof requester.email !== "string";
+  })) throw new Error("Invalid requester response");
+  return requesters as DevelopmentRequester[];
+}
+
+export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
+  const systems = await fetchJson<unknown>("/api/related-systems");
+  if (!Array.isArray(systems) || systems.some((item) => {
+    if (typeof item !== "object" || item === null) return true;
+    const system = item as Partial<RelatedSystem>;
+    return typeof system.id !== "number" || typeof system.name !== "string";
+  })) throw new Error("Invalid related systems response");
+  return systems as RelatedSystem[];
+}
+
+export async function fetchCategories(): Promise<Category[]> {
+  return fetchJson<Category[]>("/api/categories");
+}
+
+export async function createTicket(input: CreateTicketInput, idempotencyKey: string): Promise<CreatedTicket> {
+  const response = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    const message = typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string"
+      ? payload.error : "Unable to create ticket.";
+    throw new Error(message);
+  }
+  if (typeof payload !== "object" || payload === null || typeof (payload as CreatedTicket).ticketNumber !== "string") {
+    throw new Error("Invalid ticket response");
+  }
+  return payload as CreatedTicket;
+}
+
+export async function fetchTickets(params: URLSearchParams): Promise<TicketListResponse> {
+  return fetchJson<TicketListResponse>(`/api/tickets?${params.toString()}`);
+}
+
+export async function fetchTicket(ticketId: number, requesterId: number): Promise<TicketDetail> {
+  return fetchJson<TicketDetail>(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
+}
+
+export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {
+  const form = new FormData(); form.append("file", file);
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", body: form });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to upload attachment.");
+  return payload as TicketAttachmentMetadata;
+}
+
+export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<TicketAttachmentMetadata> {
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}?requesterId=${requesterId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to remove attachment.");
+  return payload as TicketAttachmentMetadata;
+}
+
+export function attachmentDownloadUrl(attachmentId: number, requesterId: number) {
+  return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
+
 export interface SystemStatus {
   online: boolean;
   status: string;
