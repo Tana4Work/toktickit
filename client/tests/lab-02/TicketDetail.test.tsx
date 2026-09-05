@@ -24,5 +24,4 @@ describe("Lab 2 Ticket Detail", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: /Back to My Tickets/ }));
     expect(onBack).toHaveBeenCalledOnce();
   });
-
 });

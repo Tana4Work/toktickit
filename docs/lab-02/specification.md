@@ -84,11 +84,11 @@ The IT department needs a professional service-desk experience for end users. A 
 
 ## 6. UI Specification Summary
 
-The application opens on the Requester Selection screen. Before Continue, neither My Tickets nor Create Ticket is marked active. After Continue, My Tickets is the default active page; Create Ticket is available from the shell. The shell contains TokTickIT identity, current Requester display, and Change Requester. The selected requester is a testing context only.
+The application shell contains TokTickIT identity, My Tickets navigation, Create Ticket navigation, current Requester display, Change Requester, and a clear active-page indication. The Requester Selection screen appears until a current Requester exists.
 
 Create Ticket uses read-only styling for Requester, Ticket Number, Ticket Date, and Status. Editable fields use consistent labels, height, required markers, field-level validation, visible focus, and a busy Submit state. Success displays the official Ticket Number and a next action. Attachments show selected, invalid, uploading, active, removed, and unavailable states.
 
-My Tickets provides search, filters, sorting, Clear Filters, pagination, Create Ticket, and a table/card representation appropriate to the viewport. Ticket Detail is read-only and shows ownership-safe ticket data and attachment viewing/removal actions; the customer UI does not expose upload from this page.
+My Tickets provides search, filters, sorting, Clear Filters, pagination, Create Ticket, and a table/card representation appropriate to the viewport. Ticket Detail is read-only and shows ownership-safe ticket data and attachment actions.
 
 All screens use the Zen Green tokens in `ui-spec.md`, support keyboard navigation, avoid color-only meaning, and provide initial, loading, success, validation, empty, no-results, and API-failure states where relevant.
 
@@ -145,5 +145,3 @@ The detailed endpoint contract is in `api-spec.md`. Required capabilities are ac
 - Ticket creation and attachment upload may be separate API operations. The approved compensation behavior is the Ticket remains saved when a later attachment upload fails, with no false active attachment metadata.
 - A local/private storage adapter is acceptable for Lab 2 if its generated keys, safe filenames, and download authorization are documented; cloud storage is not required.
 - The selected Requester ID is a client testing context and must be passed/validated consistently in the API contract; it is not proof of identity.
-- Attachment upload is available during ticket creation. Ticket Detail remains read-only for adding files and only exposes attachment metadata, download, and soft-removal actions. The backend endpoint for adding an attachment to an existing ticket remains available for the API requirement, but is not exposed in the customer UI.
-- Live responsive, visual, keyboard, and E2E evidence requires a browser/E2E runner and human review; source-level checks must not be reported as completed live evidence.

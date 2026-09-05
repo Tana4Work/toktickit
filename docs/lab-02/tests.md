@@ -8,9 +8,9 @@ Tests are planned from the specification before implementation is declared compl
 
 | Test ID | Level | Acceptance criteria | What it tests | Expected result | Planned file |
 |---|---|---|---|---|---|
-| UNIT-01 | Unit/API | AC-01 | Idempotent seed | Repeated seed creates no duplicates | `server/tests/lab-02/reference-data.api.test.ts` |
-| UNIT-02 | API/integration | AC-03 | Ticket Number generator | Backend-generated format and idempotent uniqueness are verified | `server/tests/lab-02/create-ticket.api.test.ts` |
-| UNIT-03 | API/integration | AC-11 | Attachment validator | Type, size, and active-count rules are enforced | `server/tests/lab-02/attachments.api.test.ts` |
+| UNIT-01 | Unit | AC-01 | Idempotent seed | Repeated seed creates no duplicates | `server/tests/lab-02/reference-data.test.ts` |
+| UNIT-02 | Unit | AC-03 | Ticket Number generator | Format is valid and values are unique | `server/tests/lab-02/ticket-number.test.ts` |
+| UNIT-03 | Unit | AC-11 | Attachment validator | Type, size, and active-count rules are enforced | `server/tests/lab-02/attachment-validation.test.ts` |
 | API-01 | API | AC-01, AC-02 | Active reference data | Required records load; inactive requester is excluded | `server/tests/lab-02/reference-data.api.test.ts` |
 | API-02 | API | AC-03 | Valid ticket creation | `201`, one persisted Ticket, official values returned | `server/tests/lab-02/create-ticket.api.test.ts` |
 | API-03 | API | AC-04 | Invalid ticket creation | `400`; no Ticket persisted | `server/tests/lab-02/create-ticket.api.test.ts` |
@@ -25,8 +25,8 @@ Tests are planned from the specification before implementation is declared compl
 | UI-02 | UI | AC-03, AC-04 | Create Ticket form | Fields, validation, and API payload | `client/tests/lab-02/CreateTicket.test.tsx` |
 | UI-03 | UI | AC-05, AC-06 | Create submit states | Busy disabled state, success number, preserved values | `client/tests/lab-02/CreateTicket.test.tsx` |
 | UI-04 | UI | AC-07, AC-08 | My Tickets controls | Search, filters, Clear Filters, sorting, pagination states | `client/tests/lab-02/MyTickets.test.tsx` |
-| UI-05 | UI | AC-09 | Ticket Detail access state | Read-only fields and unauthorized/missing state | `client/tests/lab-02/TicketDetail.test.tsx` |
-| UI-06 | UI | AC-10, AC-11, AC-12 | Attachment section | Existing-ticket upload plus active/removed metadata and controls | `client/tests/lab-02/TicketDetail.test.tsx` |
+| UI-05 | UI | AC-09 | Ticket Detail access state | Read-only fields and unauthorized/missing state | `client/tests/lab-02/RequesterTicketDetail.test.tsx` |
+| UI-06 | UI | AC-10, AC-11, AC-12 | Attachment section | Valid/invalid, active/removed, download/remove controls | `client/tests/lab-02/AttachmentSection.test.tsx` |
 | STYLE-01 | Visual | AC-14 | Zen Green tokens | All screens use approved colors and field/button states | `client/tests/lab-02/ZenGreen.visual.test.tsx` |
 | RESP-01 | Responsive | AC-14 | Responsive layout | Desktop/tablet/mobile have no clipping or overflow | `e2e/lab-02/responsive.spec.ts` |
 | E2E-01 | E2E | AC-01-AC-06 | Create flow | Select requester, create ticket, see official number | `e2e/lab-02/requester-ticket-flow.spec.ts` |
@@ -55,13 +55,14 @@ Tests are planned from the specification before implementation is declared compl
 
 ## 4. Responsive and Visual Checklist
 
-- [x] Zen Green tokens are applied consistently in the source stylesheet.
-- [x] Editable and read-only fields are represented in the UI implementation.
-- [x] Required markers and validation messages are implemented near fields.
-- [x] Focus indicators are implemented with `:focus-visible` styles.
-- [x] Busy and disabled buttons are implemented.
-- [x] Success, warning, error, empty, and no-results states are implemented with text.
-- [ ] Desktop, tablet, and mobile live viewport checks require browser access.
+- [ ] Zen Green tokens are applied consistently on every screen.
+- [ ] Editable and read-only fields are visually distinct.
+- [ ] Required markers and validation messages are visible near fields.
+- [ ] Focus indicators are visible with keyboard navigation.
+- [ ] Busy and disabled buttons are distinguishable.
+- [ ] Success, warning, error, empty, and no-results states do not rely on color alone.
+- [ ] Desktop, tablet, and mobile layouts have no clipping, overlap, or horizontal overflow.
+- [ ] Screenshots are readable at normal zoom for Create Ticket, My Tickets, and Ticket Detail.
 
 ## 5. Test Commands
 
@@ -79,42 +80,14 @@ npm test
 npm run build
 ```
 
-From the repository root, after PostgreSQL is running and seeded:
-
-```powershell
-npm install
-npx playwright install chromium
-npm run test:e2e
-```
-
-The Playwright runner is configured in `playwright.config.ts` and the requester flow is at `e2e/lab-02/requester-ticket-flow.spec.ts`.
+The E2E command and any required database/storage setup will be added when the chosen E2E runner and attachment adapter are approved.
 
 ## 6. Final Results
 
-Executed on 2026-09-04 from the repository workspace:
-
-| Suite | Command | Result | Evidence |
-|---|---|---|---|
-| Server unit/API/integration | `cd server; npm test -- --run` | PASS - 8 files, 21 tests | Vitest terminal output with TokTickIT PostgreSQL running |
-| Server production build | `cd server; npm run build` | PASS | TypeScript compiler output |
-| Client unit/UI | `cd client; npm test -- --run` | PASS - 5 files, 10 tests | Vitest terminal output |
-| Client production build | `cd client; npm run build` | PASS | Vite production build output |
-| Responsive/visual live check | Browser inspection | PENDING | Browser tool unavailable in this run |
-| E2E requester ticket flow | `npm run test:e2e` | PASS - 1 test | Playwright Chromium run; development-server teardown required manual interruption after the passing result |
-
-The executable suites cover reference data, requester selection, ticket creation with attachments, owned tickets, read-only ticket detail, attachment API lifecycle, size/count boundaries, validation, ownership, download, and soft removal. Browser-only screenshots, responsive checks, and the complete E2E flow remain explicit follow-up items.
+To be completed during Issue 7. Each planned test must record its final status, actual file path, command, and evidence link/screenshot where applicable. No test may be marked passed without execution evidence.
 
 ## 7. Known Limitations or Deferred Tests
 
-- Playwright is configured and the requester ticket-flow test passes with PostgreSQL running. On this Windows setup, the wrapper may remain open during development-server teardown after the passing result is printed.
-- The source includes responsive CSS and visible focus rules, but these require manual browser verification before release approval.
-- Owner: student/reviewer. Follow-up: run the documented manual checklist in `reviewer.md` and attach screenshots before creating the release PR.
-- No test is silently omitted; pending checks are recorded above.
-
-## 8. Final Acceptance-Criteria Status
-
-| Criteria | Status | Evidence |
-|---|---|---|
-| AC-01 through AC-13 | PASS | Server/client automated suites and implementation review |
-| AC-14 | PARTIAL | Source-level responsive/accessibility review; live viewport check pending |
-| AC-15 | PARTIAL | Automated commands pass; screenshots/E2E/release integration pending |
+- Exact text limits, priority values, E2E runner, and storage adapter must be approved and reflected in the contract before implementation.
+- Visual screenshot paths will be populated after the screens exist.
+- Any deferred test requires a reason, owner, and follow-up decision; it cannot be silently omitted.
