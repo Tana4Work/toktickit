@@ -1,4 +1,4 @@
-# TokTickIT Lab 2
+# TokTickIT Lab 1
 
 TokTickIT is a small React and Express service-desk application backed by PostgreSQL and Prisma.
 
@@ -38,7 +38,7 @@ npx prisma migrate deploy
 npm run prisma:seed
 ~~~
 
-The seed is idempotent and creates four Categories, seven Related Systems, four active Development Requesters, and one inactive Development Requester. Only active Requesters are shown in the Lab 2 selector.
+The seed is idempotent and creates Account and Access, Hardware, Software, and Network.
 
 ## Run the backend
 
@@ -66,23 +66,9 @@ cd client
 npm run dev
 ~~~
 
-Open http://localhost:5175. The first screen is the Lab 2 Development Requester Selection screen. Select an active requester and click Continue; this is a testing context, not authentication. No navigation item is selected before Continue. My Tickets opens first after Continue, and Create Ticket is available from the header. Use Change Requester in the header to switch the testing context.
+Open http://localhost:5173 and click Check System.
 
-The frontend calls the requester, reference-data, ticket, and attachment endpoints. It shows loading, success, validation, empty, no-results, and safe API-failure states.
-
-## Lab 2 scope
-
-Lab 2 includes requester selection, ticket creation, requester-owned ticket search/filter/list/detail views, and attachment upload/download/metadata/soft removal. Attachments are uploaded during ticket creation; Ticket Detail is read-only for adding files and only allows viewing metadata, downloading active files, and soft removal. It does not include real authentication, IT Priority, comments, service actions, event logs, profiles, admin functions, or IT workflow/status changes.
-
-## Responsive UI requirements
-
-The UI is designed for these Lab 2 viewport ranges:
-
-- Desktop: `>= 992px`
-- Tablet: `768px-991px`
-- Mobile: `< 768px`
-
-All pages should remain usable without clipping or horizontal page scrolling. Keyboard focus is visible on interactive controls.
+The frontend calls the health and categories endpoints. It shows loading, Online with the category list, or Offline with a safe user-facing message.
 
 ## Run tests and builds
 
@@ -98,33 +84,17 @@ Client:
 
 ~~~powershell
 cd client
-npm test -- --run
+npm test
 npm run build
 ~~~
-
-E2E (from the repository root, with PostgreSQL running):
-
-~~~powershell
-npm install
-npx playwright install chromium
-npm run test:e2e
-~~~
-
-The E2E flow covers requester selection, ticket creation, creation-time attachment upload, My Tickets, and Ticket Detail. The Playwright configuration is in `playwright.config.ts` and the test is in `e2e/lab-02/requester-ticket-flow.spec.ts`.
-
-For final delivery evidence, see `docs/lab-02/tests.md` and `docs/lab-02/reviewer.md`.
 
 ## Branch workflow
 
 ~~~text
-feature/lab2-01-specification-test-plan
-feature/lab2-02-reference-data-requester
-feature/lab2-03-create-ticket
-feature/lab2-04-my-tickets
-feature/lab2-05-ticket-detail
-feature/lab2-06-attachment-management
-feature/lab2-07-final-testing-delivery
-lab2-staging
+feature/1-project-foundation
+feature/2-health-check
+feature/3-category-seed
+feature/4-category-list
 ~~~
 
 If a push is rejected because the remote branch is ahead, integrate it safely first:

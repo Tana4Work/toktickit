@@ -6,7 +6,7 @@
 - Existing Lab 1 and reference-data endpoints return successful collections as raw JSON arrays for backward compatibility. New resource endpoints may use `{ "data": ... }` when explicitly documented. Safe errors use `{ "error": { "code": "...", "message": "..." } }` or the existing Lab 1 `{ "error": "..." }` shape until the API contract is versioned.
 - IDs are positive integers. Dates are ISO-8601 strings in UTC.
 - The selected requester context is supplied as `requesterId` for Lab 2 testing. It is not authentication.
-- List endpoints use `page` starting at 1 and an integer `pageSize` from `1` through `100`; default `page=1&pageSize=10`. The range is intentionally broad so the UI and API tests can exercise small pages while production callers can request larger pages.
+- List endpoints use `page` starting at 1 and `pageSize` from the allowed set `[10, 25, 50]`; default `page=1&pageSize=10`.
 
 ## Reference Data
 
@@ -37,10 +37,11 @@ Request:
 }
 ```
 
-The backend validates the requester and active reference IDs, trims text, validates Summary (3-120 characters), Description (10-2000 characters), and priority (`LOW`, `MEDIUM`, `HIGH`, or `URGENT`), generates `ticketNumber`, `ticketDate`, and `currentStatus`, and persists the Ticket. The response is `201` with the saved Ticket as a raw JSON object (not wrapped in `data`):
+The backend validates the requester and active reference IDs, trims text, validates Summary (3-120 characters), Description (10-2000 characters), and priority (`LOW`, `MEDIUM`, `HIGH`, or `URGENT`), generates `ticketNumber`, `ticketDate`, and `currentStatus`, and persists the Ticket. The response is `201` with the saved Ticket as a JSON object:
 
 ```json
 {
+  "data": {
     "id": 10,
     "ticketNumber": "TK-2026-000010",
     "ticketDate": "2026-08-31T10:00:00.000Z",
@@ -51,6 +52,7 @@ The backend validates the requester and active reference IDs, trims text, valida
     "requestedPriority": "MEDIUM",
     "description": "The battery reaches 0% after about one hour.",
     "currentStatus": "New"
+  }
 }
 ```
 
