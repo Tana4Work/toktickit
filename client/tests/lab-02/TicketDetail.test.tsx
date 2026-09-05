@@ -25,4 +25,17 @@ describe("Lab 2 Ticket Detail", () => {
     expect(onBack).toHaveBeenCalledOnce();
   });
 
+  it("uploads a valid attachment from Ticket Detail", async () => {
+    const ticket = { id: 10, ticketNumber: "TK-2026-000010", ticketDate: "2026-09-01T00:00:00.000Z", summary: "Laptop issue", description: "The laptop cannot start correctly.", requestedPriority: "MEDIUM", currentStatus: "New", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", requester: { id: 1, name: "Active User", email: "active@example.com" }, category: { id: 1, name: "Hardware" }, relatedSystem: { id: 1, name: "Laptop" }, attachments: [] };
+    vi.spyOn(api, "fetchTicket").mockResolvedValue(ticket);
+    const upload = vi.spyOn(api, "uploadAttachment").mockResolvedValue({ id: 2, originalName: "screen.pdf", mimeType: "application/pdf", sizeBytes: 100, createdAt: "2026-09-01T00:00:00.000Z", removedAt: null, removalReason: null });
+    render(<RequesterProvider><DetailHarness onBack={vi.fn()} /></RequesterProvider>);
+    expect(await screen.findByText("No attachments.")).toBeInTheDocument();
+    const file = new File(["proof"], "screen.pdf", { type: "application/pdf" });
+    await userEvent.setup().upload(screen.getByLabelText("Add attachment to this ticket"), file);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Upload Attachment" }));
+    expect(upload).toHaveBeenCalledWith(10, 1, file);
+    expect(await screen.findByText("Attachment uploaded successfully.")).toBeInTheDocument();
+  });
+
 });
