@@ -72,7 +72,7 @@ The frontend calls the requester, reference-data, ticket, and attachment endpoin
 
 ## Lab 2 scope
 
-Lab 2 includes requester selection, ticket creation, requester-owned ticket search/filter/list/detail views, and attachment upload/download/metadata/soft removal. Attachments are uploaded during ticket creation; Ticket Detail is read-only for adding files and only allows viewing metadata, downloading active files, and soft removal. It does not include real authentication, IT Priority, comments, service actions, event logs, profiles, admin functions, or IT workflow/status changes.
+Lab 2 includes requester selection, ticket creation, requester-owned ticket search/filter/list/detail views, and attachment upload/download/metadata/soft removal. Attachments can be uploaded during ticket creation or from Ticket Detail; ticket fields remain read-only there, while attachment metadata, active-file download, upload, and soft removal are available. It does not include real authentication, IT Priority, comments, service actions, event logs, profiles, admin functions, or IT workflow/status changes.
 
 ## Responsive UI requirements
 

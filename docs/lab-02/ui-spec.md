@@ -47,7 +47,7 @@
 
 ## Ticket Detail
 
-- Present all ticket fields as read-only, with Ticket Number and Status visually prominent.
+- Present all ticket fields as read-only, with Ticket Number and Status visually prominent. Provide an attachment upload control in the attachment section, with the allowed file types, 5 MB per-file limit, and upload state visible.
 - Provide a clear route back to My Tickets.
 - Show attachment metadata and action availability based on active/removed state.
 - Show loading, missing/unauthorized, and API-failure states without revealing another requester’s data.
