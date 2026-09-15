@@ -60,6 +60,8 @@ model User {
   updatedAt             DateTime     @updatedAt
   requesterTickets      Ticket[]     @relation("RequesterUserTickets")
   sessions              Session[]
+  authoredComments      PublicComment[] @relation("PublicCommentAuthor")
+  resolutionIndications Ticket[]     @relation("ResolutionIndication")
 
   @@index([role, active])
 }
@@ -88,16 +90,32 @@ model Ticket {
   categoryId         Int
   requesterId        Int
   requesterUserId    Int?
+  problemAppearsResolvedAt DateTime?
+  problemAppearsResolvedById Int?
   relatedSystemId    Int
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   category           Category             @relation(fields: [categoryId], references: [id])
   requester          DevelopmentRequester @relation(fields: [requesterId], references: [id])
   requesterUser      User?                @relation("RequesterUserTickets", fields: [requesterUserId], references: [id], onDelete: SetNull)
+  problemAppearsResolvedBy User?          @relation("ResolutionIndication", fields: [problemAppearsResolvedById], references: [id], onDelete: SetNull)
   relatedSystem      RelatedSystem        @relation(fields: [relatedSystemId], references: [id])
   attachments        Attachment[]
+  publicComments     PublicComment[]
 
   @@index([requesterUserId, updatedAt])
+}
+
+model PublicComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  authorId  Int
+  content   String
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    User     @relation("PublicCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
 }
 
 model Attachment {

@@ -123,6 +123,20 @@ export async function fetchTickets(params) {
 export async function fetchTicket(ticketId, requesterId) {
     return fetchJson(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
 }
+export async function addPublicComment(ticketId, content) {
+    const response = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+    const payload = await response.json();
+    if (!response.ok)
+        throw new Error(errorMessage(payload, "Unable to add Public Comment."));
+    return payload;
+}
+export async function indicateProblemResolved(ticketId) {
+    const response = await fetch(`${API_URL}/api/tickets/${ticketId}/problem-resolved`, { method: "POST", headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+    const payload = await response.json();
+    if (!response.ok)
+        throw new Error(errorMessage(payload, "Unable to record the resolution indication."));
+    return payload;
+}
 export async function uploadAttachment(ticketId, requesterId, file) {
     const form = new FormData();
     form.append("file", file);

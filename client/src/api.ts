@@ -108,6 +108,15 @@ export interface TicketDetail extends TicketListItem {
   createdAt: string;
   requester: DevelopmentRequester;
   attachments: TicketAttachmentMetadata[];
+  problemAppearsResolvedAt?: string | null;
+  publicComments?: PublicComment[];
+}
+
+export interface PublicComment {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: Pick<AuthUser, "id" | "name" | "email" | "role">;
 }
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -197,6 +206,20 @@ export async function fetchTickets(params: URLSearchParams): Promise<TicketListR
 
 export async function fetchTicket(ticketId: number, requesterId: number): Promise<TicketDetail> {
   return fetchJson<TicketDetail>(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
+}
+
+export async function addPublicComment(ticketId: number, content: string): Promise<PublicComment> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Public Comment."));
+  return payload as PublicComment;
+}
+
+export async function indicateProblemResolved(ticketId: number): Promise<{ problemAppearsResolvedAt: string }> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/problem-resolved`, { method: "POST", headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to record the resolution indication."));
+  return payload as { problemAppearsResolvedAt: string };
 }
 
 export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {

@@ -23,7 +23,7 @@ Tests are planned before implementation is considered complete. Each test follow
 | AUTHZ-01 | API | AC-03/04 | Direct role and ownership authorization; no data leakage | `server/tests/lab-03/authorization.api.test.ts` |
 | MIG-01 | Migration | AC-08 | Lab 2 data remains valid and ownership is mapped | `server/tests/lab-03/migration.api.test.ts` |
 | REG-01 | API/UI | AC-03 | Requester Ticket and Attachment regression without selector | `server/tests/lab-03/requester-regression.api.test.ts` |
-| REG-02 | API/UI | AC-06 | Public Comments and resolution indication | `server/tests/lab-03/comments-notes.api.test.ts` |
+| REG-02 | API/UI | AC-06 | Public Comments and resolution indication | `server/tests/lab-03/comments.api.test.ts` |
 | QUEUE-01 | API/UI | AC-05 | Queue search, filters, sorting, pagination, and states | `server/tests/lab-03/staff-queue.api.test.ts`, `client/tests/lab-03/StaffTicketQueue.test.tsx` |
 | STAFF-01 | API/UI | AC-05/06 | Ownership, priority, statuses, comments, notes, and Attachments | `server/tests/lab-03/staff-ticket-detail.api.test.ts`, `client/tests/lab-03/StaffTicketDetail.test.tsx` |
 | ADMIN-01 | API/UI | AC-07 | User list, search, optional role filter, create, edit | `server/tests/lab-03/users-admin.api.test.ts`, `client/tests/lab-03/UserManagement.test.tsx` |
