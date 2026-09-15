@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { attachmentDownloadUrl, fetchTicket, removeAttachment, TicketDetail as TicketDetailData, uploadAttachment } from "./api.js";
+import { addPublicComment, attachmentDownloadUrl, fetchTicket, indicateProblemResolved, removeAttachment, TicketDetail as TicketDetailData, uploadAttachment } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 
 type TicketDetailProps = { ticketId: number; onBack: () => void };
@@ -12,6 +12,9 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
   const [uploadState, setUploadState] = useState<"idle" | "uploading">("idle");
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [comment, setComment] = useState("");
+  const [commentState, setCommentState] = useState<"idle" | "saving">("idle");
+  const [commentError, setCommentError] = useState("");
 
   useEffect(() => {
     if (!currentRequester) return;
@@ -59,6 +62,19 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
     }
   }
 
+  async function handleComment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ticket || !comment.trim()) { setCommentError("Comment cannot be empty."); return; }
+    setCommentState("saving"); setCommentError("");
+    try { await addPublicComment(ticket.id, comment.trim()); setComment(""); setTicket(await fetchTicket(ticketId, currentRequester!.id)); } catch (error) { setCommentError(error instanceof Error ? error.message : "Unable to add Public Comment."); } finally { setCommentState("idle"); }
+  }
+
+  async function handleProblemResolved() {
+    if (!ticket) return;
+    setActionError("");
+    try { await indicateProblemResolved(ticket.id); setTicket(await fetchTicket(ticketId, currentRequester!.id)); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to record the resolution indication."); }
+  }
+
   if (state === "loading") return <section className="content-card" aria-labelledby="ticket-detail-heading"><h2 id="ticket-detail-heading">Ticket Detail</h2><p role="status">Loading ticket detail...</p></section>;
   if (state === "error" || !ticket) return <section className="content-card" aria-labelledby="ticket-detail-heading"><h2 id="ticket-detail-heading">Ticket Detail</h2><p role="alert" className="text-danger">Unable to load this ticket. It may not belong to the selected Requester.</p><button className="btn btn-outline-success" onClick={onBack}>Back to My Tickets</button></section>;
 
@@ -76,6 +92,8 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
       <dt className="col-sm-4">Description</dt><dd className="col-sm-8" style={{ whiteSpace: "pre-wrap" }}>{ticket.description}</dd>
       <dt className="col-sm-4">Status</dt><dd className="col-sm-8"><span className="status-badge">{ticket.currentStatus}</span></dd>
     </dl>
+    <div className="content-card public-comments-panel"><div className="section-heading"><div><p className="eyebrow">SHARED COMMUNICATION</p><h3>Public Comments</h3></div></div>{(ticket.publicComments ?? []).length === 0 ? <p role="status">No Public Comments yet.</p> : <ul className="comment-list">{(ticket.publicComments ?? []).map((item) => <li key={item.id}><div><strong>{item.author.name}</strong><small>{new Date(item.createdAt).toLocaleString()}</small></div><p>{item.content}</p></li>)}</ul>}<form onSubmit={handleComment} className="comment-form"><label htmlFor="public-comment">Add a Public Comment</label><textarea id="public-comment" className="form-control" rows={3} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a message visible to the Requester and support team." maxLength={2000} />{commentError && <p role="alert" className="text-danger">{commentError}</p>}<button className="btn btn-success" type="submit" disabled={commentState === "saving" || !comment.trim()}>{commentState === "saving" ? "Posting..." : "Post Public Comment"}</button></form></div>
+    <div className="content-card resolution-panel"><h3>Reported Problem</h3><p>{ticket.problemAppearsResolvedAt ? `You indicated that this problem appeared resolved on ${new Date(ticket.problemAppearsResolvedAt).toLocaleString()}. IT Staff remain responsible for formally resolving or closing the Ticket.` : "If the issue appears fixed, let IT Staff know. This does not formally resolve or close the Ticket."}</p>{!ticket.problemAppearsResolvedAt && <button className="btn btn-outline-success" type="button" onClick={() => void handleProblemResolved()}>Problem Appears Resolved</button>}</div>
     <div className="attachment-panel"><h3>Attachments</h3>
     {actionError && <p role="alert" className="text-danger">{actionError}</p>}
     <form className="existing-attachment-upload" onSubmit={handleUpload}>

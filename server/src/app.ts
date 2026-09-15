@@ -59,6 +59,10 @@ async function legacyRequesterIdForUser(userId: number) {
   return legacy?.id ?? null;
 }
 
+function publicCommentResponse(comment: { id: number; content: string; createdAt: Date; author: { id: number; name: string; email: string; role: string } }) {
+  return { id: comment.id, content: comment.content, createdAt: comment.createdAt, author: comment.author };
+}
+
 function authBody(req: Request) {
   return isRecord(req.body) ? req.body : {};
 }
@@ -348,6 +352,8 @@ app.get("/api/tickets/:ticketId", ...requireRequester, async (req: Authenticated
         requester: { select: { id: true, name: true, email: true } },
         category: { select: { id: true, name: true } },
         relatedSystem: { select: { id: true, name: true } },
+        problemAppearsResolvedAt: true,
+        publicComments: { orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } },
         attachments: { orderBy: { createdAt: "asc" }, select: { id: true, originalName: true, mimeType: true, sizeBytes: true, createdAt: true, removedAt: true, removalReason: true } },
       },
     });
@@ -359,6 +365,46 @@ app.get("/api/tickets/:ticketId", ...requireRequester, async (req: Authenticated
   } catch {
     res.status(500).json({ error: "Unable to load ticket." });
   }
+});
+
+app.post("/api/tickets/:ticketId/comments", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  const content = isRecord(req.body) && typeof req.body.content === "string" ? req.body.content.trim() : "";
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
+  if (!Number.isInteger(ticketId) || ticketId < 1 || content.length < 1 || content.length > 2000) {
+    res.status(400).json({ error: { code: "INVALID_COMMENT", message: "Comment content must be between 1 and 2000 characters." } });
+    return;
+  }
+  try {
+    const ticket = await getPrisma().ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, ...(requesterId ? [{ requesterId }] : [])] }, select: { id: true } });
+    if (!ticket) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; }
+    const comment = await getPrisma().publicComment.create({ data: { ticketId, authorId: req.user!.id, content }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } });
+    res.status(201).json(publicCommentResponse(comment));
+  } catch { res.status(500).json({ error: { code: "COMMENT_CREATE_ERROR", message: "Unable to add Public Comment." } }); }
+});
+
+app.get("/api/tickets/:ticketId/comments", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
+  if (!Number.isInteger(ticketId) || ticketId < 1) { res.status(400).json({ error: { code: "INVALID_TICKET", message: "Invalid ticket ID." } }); return; }
+  try {
+    const ticket = await getPrisma().ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, ...(requesterId ? [{ requesterId }] : [])] }, select: { id: true } });
+    if (!ticket) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; }
+    const comments = await getPrisma().publicComment.findMany({ where: { ticketId }, orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } });
+    res.status(200).json(comments.map(publicCommentResponse));
+  } catch { res.status(500).json({ error: { code: "COMMENT_LIST_ERROR", message: "Unable to load Public Comments." } }); }
+});
+
+app.post("/api/tickets/:ticketId/problem-resolved", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
+  if (!Number.isInteger(ticketId) || ticketId < 1) { res.status(400).json({ error: { code: "INVALID_TICKET", message: "Invalid ticket ID." } }); return; }
+  try {
+    const ticket = await getPrisma().ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, ...(requesterId ? [{ requesterId }] : [])] }, select: { id: true } });
+    if (!ticket) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; }
+    const updated = await getPrisma().ticket.update({ where: { id: ticketId }, data: { problemAppearsResolvedAt: new Date(), problemAppearsResolvedById: req.user!.id }, select: { id: true, problemAppearsResolvedAt: true } });
+    res.status(200).json({ problemAppearsResolvedAt: updated.problemAppearsResolvedAt });
+  } catch { res.status(500).json({ error: { code: "RESOLUTION_INDICATION_ERROR", message: "Unable to record the resolution indication." } }); }
 });
 
 function attachmentRequesterId(req: Request) {
