@@ -42,6 +42,39 @@ model DevelopmentRequester {
   tickets   Ticket[]
 }
 
+enum UserRole {
+  Requester
+  ITStaff
+  Administrator
+}
+
+model User {
+  id                    Int          @id @default(autoincrement())
+  name                  String
+  email                 String       @unique
+  passwordHash          String
+  role                  UserRole
+  active                Boolean      @default(true)
+  mustChangePassword    Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  requesterTickets      Ticket[]     @relation("RequesterUserTickets")
+  sessions              Session[]
+
+  @@index([role, active])
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
 model Ticket {
   id                 Int                  @id @default(autoincrement())
   ticketNumber       String               @unique
@@ -54,13 +87,17 @@ model Ticket {
   requestFingerprint String
   categoryId         Int
   requesterId        Int
+  requesterUserId    Int?
   relatedSystemId    Int
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   category           Category             @relation(fields: [categoryId], references: [id])
   requester          DevelopmentRequester @relation(fields: [requesterId], references: [id])
+  requesterUser      User?                @relation("RequesterUserTickets", fields: [requesterUserId], references: [id], onDelete: SetNull)
   relatedSystem      RelatedSystem        @relation(fields: [relatedSystemId], references: [id])
   attachments        Attachment[]
+
+  @@index([requesterUserId, updatedAt])
 }
 
 model Attachment {

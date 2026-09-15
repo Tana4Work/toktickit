@@ -4,7 +4,9 @@
 
 - Base URL: `/api`.
 - JSON responses use ISO-8601 UTC timestamps and safe structured errors: `{ "error": { "code": "...", "message": "..." } }`.
-- Authentication uses the approved server-side session or token mechanism; secrets and password hashes never reach client code.
+- Authentication uses an opaque bearer token in the `Authorization: Bearer <token>` header. The server stores only a SHA-256 token hash in `Session`.
+- Sessions expire after eight hours and are invalidated by logout. Inactive users cannot authenticate or continue an existing session.
+- Passwords are stored as salted `scrypt` hashes. A valid password is 8-128 characters; password hashes and tokens never appear in responses.
 - `401` means unauthenticated, `403` means authenticated but forbidden, `404` means an inaccessible/missing resource without leaking protected existence, `409` means a conflict, and `422` means valid JSON with invalid business input.
 
 ## Authentication
@@ -16,9 +18,11 @@
 | GET | `/auth/me` | Return the current authenticated user and role. |
 | POST | `/auth/change-password` | Save a valid new password and clear password-change-required state. |
 
+All application APIs require authentication and a completed initial password change. Requests made with an initial password receive `403 PASSWORD_CHANGE_REQUIRED` until `/auth/change-password` succeeds.
+
 ## Requester APIs
 
-Continue all Lab 2 Ticket and Attachment APIs, but derive ownership from the authenticated user. Do not trust a client-supplied `requesterId`. Add:
+Continue all Lab 2 Ticket and Attachment APIs, but derive ownership from the authenticated user. The legacy `requesterId` query/body value is ignored for authorization and cannot broaden access. Add:
 
 | Method | Path | Purpose |
 |---|---|---|

@@ -7,6 +7,8 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
+import { createSessionToken, passwordChangeRequired, publicUser, requireAuth, requireRoles, sessionExpiry, type AuthenticatedRequest } from "./auth.js";
+import { hashPassword, isValidPassword, verifyPassword } from "./passwords.js";
 // getPrisma() is your lazy database handle. Call it INSIDE a route when you
 // need the DB (Issue 4). It is intentionally unused until then.
 void getPrisma;
@@ -47,13 +49,83 @@ app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "TokTickIT API" });
 });
 
+const requireApplicationUser = [requireAuth, passwordChangeRequired];
+const requireRequester = [requireAuth, passwordChangeRequired, requireRoles("Requester")];
+
+async function legacyRequesterIdForUser(userId: number) {
+  const user = await getPrisma().user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user) return null;
+  const legacy = await getPrisma().developmentRequester.findUnique({ where: { email: user.email }, select: { id: true } });
+  return legacy?.id ?? null;
+}
+
+function authBody(req: Request) {
+  return isRecord(req.body) ? req.body : {};
+}
+
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  const body = authBody(req);
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!email || !password) {
+    res.status(400).json({ error: { code: "INVALID_CREDENTIALS", message: "Email and password are required." } });
+    return;
+  }
+  try {
+    const user = await getPrisma().user.findUnique({ where: { email } });
+    if (!user || !user.active || !verifyPassword(password, user.passwordHash)) {
+      res.status(401).json({ error: { code: "INVALID_CREDENTIALS", message: "Email or password is incorrect." } });
+      return;
+    }
+    const token = createSessionToken();
+    await getPrisma().session.create({ data: { tokenHash: createHash("sha256").update(token).digest("hex"), userId: user.id, expiresAt: sessionExpiry() } });
+    res.status(200).json({ token, user: publicUser(user) });
+  } catch {
+    res.status(500).json({ error: { code: "LOGIN_ERROR", message: "Unable to complete login." } });
+  }
+});
+
+app.post("/api/auth/logout", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (req.sessionId) await getPrisma().session.delete({ where: { id: req.sessionId } });
+    res.status(204).send();
+  } catch {
+    res.status(500).json({ error: { code: "LOGOUT_ERROR", message: "Unable to complete logout." } });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  res.status(200).json({ user: publicUser(req.user!) });
+});
+
+app.post("/api/auth/change-password", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const body = authBody(req);
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  const confirmation = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+  if (req.user!.mustChangePassword && currentPassword && !verifyPassword(currentPassword, req.user!.passwordHash)) {
+    res.status(401).json({ error: { code: "INVALID_CURRENT_PASSWORD", message: "The current temporary password is incorrect." } });
+    return;
+  }
+  if (!isValidPassword(newPassword) || newPassword !== confirmation) {
+    res.status(400).json({ error: { code: "INVALID_PASSWORD", message: "Passwords must match and be 8-128 characters." } });
+    return;
+  }
+  try {
+    const user = await getPrisma().user.update({ where: { id: req.user!.id }, data: { passwordHash: hashPassword(newPassword), mustChangePassword: false } });
+    res.status(200).json({ user: publicUser(user) });
+  } catch {
+    res.status(500).json({ error: { code: "PASSWORD_CHANGE_ERROR", message: "Unable to change password." } });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Issue 4 — Category list
 // Add:  GET /api/categories
 //   -> read categories from PostgreSQL via getPrisma().category.findMany(...)
 //   -> return each { id, name } in a predictable (id) order
 //   -> on failure, respond 500 with a safe message (no internal details)
-app.get("/api/categories", async (_req: Request, res: Response) => {
+app.get("/api/categories", ...requireApplicationUser, async (_req: Request, res: Response) => {
   try {
     const categories = await getPrisma().category.findMany({
       where: { active: true },
@@ -68,7 +140,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 });
 // ---------------------------------------------------------------------------
 
-app.get("/api/related-systems", async (_req: Request, res: Response) => {
+app.get("/api/related-systems", ...requireApplicationUser, async (_req: Request, res: Response) => {
   try {
     const systems = await getPrisma().relatedSystem.findMany({
       where: { active: true },
@@ -81,7 +153,7 @@ app.get("/api/related-systems", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/requesters", async (_req: Request, res: Response) => {
+app.get("/api/requesters", ...requireApplicationUser, async (_req: Request, res: Response) => {
   try {
     const requesters = await getPrisma().developmentRequester.findMany({
       where: { active: true },
@@ -104,7 +176,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-app.post("/api/tickets", async (req: Request, res: Response) => {
+app.post("/api/tickets", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
   const idempotencyKey = req.header("Idempotency-Key")?.trim();
   if (!idempotencyKey || idempotencyKey.length > 120) {
     res.status(400).json({ error: "A valid Idempotency-Key header is required." });
@@ -117,7 +189,7 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
     return;
   }
 
-  const requesterId = typeof body.requesterId === "number" ? body.requesterId : NaN;
+  const requesterId = await legacyRequesterIdForUser(req.user!.id) ?? NaN;
   const categoryId = typeof body.categoryId === "number" ? body.categoryId : NaN;
   const relatedSystemId = typeof body.relatedSystemId === "number" ? body.relatedSystemId : NaN;
   const summary = typeof body.summary === "string" ? body.summary.trim() : "";
@@ -166,6 +238,7 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
         idempotencyKey,
         requestFingerprint: fingerprint,
         requesterId,
+        requesterUserId: req.user!.id,
         categoryId,
         relatedSystemId,
       },
@@ -197,8 +270,8 @@ function queryString(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
-app.get("/api/tickets", async (req: Request, res: Response) => {
-  const requesterId = Number(queryString(req.query.requesterId));
+app.get("/api/tickets", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
+  const requesterId = await legacyRequesterIdForUser(req.user!.id) ?? NaN;
   const search = queryString(req.query.search)?.trim() ?? "";
   const categoryId = queryString(req.query.categoryId);
   const relatedSystemId = queryString(req.query.relatedSystemId);
@@ -226,7 +299,7 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
   }
 
   const where: Prisma.TicketWhereInput = {
-    requesterId,
+    OR: [{ requesterUserId: req.user!.id }, ...(Number.isInteger(requesterId) ? [{ requesterId }] : [])],
     ...(search ? { OR: [{ ticketNumber: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }] } : {}),
     ...(parsedCategoryId === undefined ? {} : { categoryId: parsedCategoryId }),
     ...(parsedRelatedSystemId === undefined ? {} : { relatedSystemId: parsedRelatedSystemId }),
@@ -258,9 +331,9 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/tickets/:ticketId", async (req: Request, res: Response) => {
+app.get("/api/tickets/:ticketId", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
   const ticketId = Number(req.params.ticketId);
-  const requesterId = Number(queryString(req.query.requesterId));
+  const requesterId = await legacyRequesterIdForUser(req.user!.id) ?? NaN;
   if (!Number.isInteger(ticketId) || ticketId < 1 || !Number.isInteger(requesterId) || requesterId < 1) {
     res.status(400).json({ error: "Invalid ticket or requester ID." });
     return;
@@ -268,7 +341,7 @@ app.get("/api/tickets/:ticketId", async (req: Request, res: Response) => {
 
   try {
     const ticket = await getPrisma().ticket.findFirst({
-      where: { id: ticketId, requesterId },
+      where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, ...(Number.isInteger(requesterId) ? [{ requesterId }] : [])] },
       select: {
         id: true, ticketNumber: true, ticketDate: true, summary: true, description: true,
         requestedPriority: true, currentStatus: true, createdAt: true, updatedAt: true,
@@ -293,10 +366,10 @@ function attachmentRequesterId(req: Request) {
   return Number.isInteger(requesterId) && requesterId > 0 ? requesterId : null;
 }
 
-app.post("/api/tickets/:ticketId/attachments", (req: Request, res: Response) => {
+app.post("/api/tickets/:ticketId/attachments", ...requireRequester, (req: AuthenticatedRequest, res: Response) => {
   upload.single("file")(req, res, async (error) => {
     const ticketId = Number(req.params.ticketId);
-    const requesterId = attachmentRequesterId(req);
+    const requesterId = await legacyRequesterIdForUser(req.user!.id);
     if (!Number.isInteger(ticketId) || ticketId < 1 || requesterId === null) {
       res.status(400).json({ error: "Invalid ticket or requester ID." });
       return;
@@ -312,7 +385,7 @@ app.post("/api/tickets/:ticketId/attachments", (req: Request, res: Response) => 
 
     try {
       const prisma = getPrisma();
-      const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, requesterId }, select: { id: true } });
+      const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, { requesterId }] }, select: { id: true } });
       if (!ticket) { res.status(404).json({ error: "Ticket not found." }); return; }
       const activeCount = await prisma.attachment.count({ where: { ticketId, removedAt: null } });
       if (activeCount >= MAX_ACTIVE_ATTACHMENTS) { res.status(409).json({ error: "A ticket may have at most five active attachments." }); return; }
@@ -334,24 +407,24 @@ app.post("/api/tickets/:ticketId/attachments", (req: Request, res: Response) => 
   });
 });
 
-app.get("/api/tickets/:ticketId/attachments", async (req: Request, res: Response) => {
+app.get("/api/tickets/:ticketId/attachments", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
   const ticketId = Number(req.params.ticketId);
-  const requesterId = attachmentRequesterId(req);
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
   if (!Number.isInteger(ticketId) || ticketId < 1 || requesterId === null) { res.status(400).json({ error: "Invalid ticket or requester ID." }); return; }
   try {
-    const ticket = await getPrisma().ticket.findFirst({ where: { id: ticketId, requesterId }, select: { id: true } });
+    const ticket = await getPrisma().ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user!.id }, { requesterId }] }, select: { id: true } });
     if (!ticket) { res.status(404).json({ error: "Ticket not found." }); return; }
     const attachments = await getPrisma().attachment.findMany({ where: { ticketId }, orderBy: { createdAt: "asc" } });
     res.status(200).json(attachments.map(attachmentResponse));
   } catch { res.status(500).json({ error: "Unable to load attachments." }); }
 });
 
-app.get("/api/attachments/:attachmentId/download", async (req: Request, res: Response) => {
+app.get("/api/attachments/:attachmentId/download", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
   const attachmentId = Number(req.params.attachmentId);
-  const requesterId = attachmentRequesterId(req);
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
   if (!Number.isInteger(attachmentId) || attachmentId < 1 || requesterId === null) { res.status(400).json({ error: "Invalid attachment or requester ID." }); return; }
   try {
-    const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, removedAt: null, ticket: { requesterId } } });
+    const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, removedAt: null, ticket: { OR: [{ requesterUserId: req.user!.id }, { requesterId }] } } });
     if (!attachment) { res.status(404).json({ error: "Attachment not found." }); return; }
     const safePath = path.resolve(attachmentStorage, attachment.storageKey);
     if (path.dirname(safePath) !== attachmentStorage) { res.status(404).json({ error: "Attachment not found." }); return; }
@@ -359,14 +432,14 @@ app.get("/api/attachments/:attachmentId/download", async (req: Request, res: Res
   } catch { res.status(500).json({ error: "Unable to download attachment." }); }
 });
 
-app.delete("/api/attachments/:attachmentId", async (req: Request, res: Response) => {
+app.delete("/api/attachments/:attachmentId", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
   const attachmentId = Number(req.params.attachmentId);
-  const requesterId = attachmentRequesterId(req);
+  const requesterId = await legacyRequesterIdForUser(req.user!.id);
   const reason = isRecord(req.body) && typeof req.body.reason === "string" ? req.body.reason.trim() : "";
   if (!Number.isInteger(attachmentId) || attachmentId < 1 || requesterId === null) { res.status(400).json({ error: "Invalid attachment or requester ID." }); return; }
   if (reason.length < 3 || reason.length > 200) { res.status(400).json({ error: "A removal reason between 3 and 200 characters is required." }); return; }
   try {
-    const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, ticket: { requesterId } } });
+    const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, ticket: { OR: [{ requesterUserId: req.user!.id }, { requesterId }] } } });
     if (!attachment) { res.status(404).json({ error: "Attachment not found." }); return; }
     if (attachment.removedAt) { res.status(409).json({ error: "Attachment has already been removed." }); return; }
     const removed = await getPrisma().attachment.update({ where: { id: attachmentId }, data: { removedAt: new Date(), removalReason: reason } });

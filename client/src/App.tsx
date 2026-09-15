@@ -1,126 +1,34 @@
-import { useEffect, useState } from "react";
-import { checkSystem, Category, DevelopmentRequester, fetchDevelopmentRequesters } from "./api.js";
+import { FormEvent, useEffect, useState } from "react";
+import { changePassword, checkSystem, fetchCurrentUser, getAuthToken, getStoredUser, login, logout, type AuthUser, type Category } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
 import TicketDetail from "./TicketDetail.js";
 
-// UI states you must handle for Issue 4: idle, loading, success, error.
-type UiState = "idle" | "loading" | "success" | "error";
+type Page = "create" | "tickets";
+
+function LoginScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [showPassword, setShowPassword] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { onLogin(await login(email, password)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to sign in."); } finally { setBusy(false); } }
+  return <section className="requester-context requester-selection-card auth-card" aria-labelledby="login-heading"><div className="requester-hero-icon" aria-hidden="true" /><h1 id="login-heading" className="h2">Sign in to your account</h1><p className="text-secondary">Use your TokTickIT email address and password to continue.</p><hr /><form onSubmit={submit} noValidate><div className="mb-3 text-start"><label className="form-label" htmlFor="login-email">Email address</label><input id="login-email" className="form-control" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></div><div className="mb-3 text-start"><label className="form-label" htmlFor="login-password">Password</label><div className="password-field"><input id="login-password" className="form-control" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /><button type="button" className="password-toggle" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "Hide" : "Show"}</button></div></div>{error && <div className="auth-error" role="alert"><span className="auth-error-icon" aria-hidden="true">!</span><div><strong>Invalid email or password.</strong><span>Please try again.</span></div></div>}<button className="btn btn-success auth-submit" type="submit" disabled={busy || !email || !password}>{busy ? "Signing in..." : "Sign In"}</button></form></section>;
+}
+
+function ChangePasswordScreen({ onChanged }: { onChanged: (user: AuthUser) => void }) {
+  const [currentPassword, setCurrentPassword] = useState(""); const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState(""); const [showCurrent, setShowCurrent] = useState(false); const [showPassword, setShowPassword] = useState(false); const [showConfirmation, setShowConfirmation] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const rules = [{ label: "At least 8 characters", valid: password.length >= 8 }, { label: "Include upper and lower case letters", valid: /[A-Z]/.test(password) && /[a-z]/.test(password) }, { label: "Include a number and a special character", valid: /\d/.test(password) && /[^A-Za-z0-9]/.test(password) }];
+  async function submit(event: FormEvent) { event.preventDefault(); if (!rules.every((rule) => rule.valid) || password !== confirmation) { setError("Use a valid password and make sure both new passwords match."); return; } setBusy(true); setError(""); try { onChanged(await changePassword(password, confirmation, currentPassword)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to change password."); } finally { setBusy(false); } }
+  return <section className="requester-context requester-selection-card auth-card" aria-labelledby="change-password-heading"><h1 id="change-password-heading" className="h2">Change Your Password</h1><p className="text-secondary">You must change your password to continue.</p><hr /><form onSubmit={submit} noValidate><div className="mb-3 text-start"><label className="form-label" htmlFor="current-password">Current (temporary) password</label><div className="password-field"><input id="current-password" className="form-control" type={showCurrent ? "text" : "password"} autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /><button type="button" className="password-toggle" aria-label={showCurrent ? "Hide current password" : "Show current password"} onClick={() => setShowCurrent((value) => !value)}>{showCurrent ? "Hide" : "Show"}</button></div></div><div className="mb-3 text-start"><label className="form-label" htmlFor="new-password">New password</label><div className="password-field"><input id="new-password" className="form-control" type={showPassword ? "text" : "password"} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /><button type="button" className="password-toggle" aria-label={showPassword ? "Hide new password" : "Show new password"} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "Hide" : "Show"}</button></div></div><div className="mb-3 text-start"><label className="form-label" htmlFor="confirm-password">Confirm new password</label><div className="password-field"><input id="confirm-password" className="form-control" type={showConfirmation ? "text" : "password"} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /><button type="button" className="password-toggle" aria-label={showConfirmation ? "Hide confirmation password" : "Show confirmation password"} onClick={() => setShowConfirmation((value) => !value)}>{showConfirmation ? "Hide" : "Show"}</button></div></div><div className="password-rules" aria-live="polite"><strong>Password must:</strong>{rules.map((rule) => <span key={rule.label} className={rule.valid ? "rule-valid" : ""}><span aria-hidden="true">{rule.valid ? "✓" : "○"}</span>{rule.label}</span>)}</div>{error && <p className="text-danger mt-3" role="alert">{error}</p>}<button className="btn btn-success auth-submit" type="submit" disabled={busy || !currentPassword || !password || !confirmation}>{busy ? "Saving..." : "Continue"}</button></form></section>;
+}
 
 export default function App() {
-  const [state, setState] = useState<UiState>("idle");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [requesters, setRequesters] = useState<DevelopmentRequester[]>([]);
-  const [requesterState, setRequesterState] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [selectionConfirmed, setSelectionConfirmed] = useState(false);
-  const [activePage, setActivePage] = useState<"create" | "tickets">("create");
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const { currentRequester, selectRequester, clearRequester } = useRequester();
-
-  async function loadRequesters() {
-    setRequesterState("loading");
-    try {
-      setRequesters(await fetchDevelopmentRequesters());
-      setRequesterState("success");
-    } catch {
-      setRequesters([]);
-      setRequesterState("error");
-    }
-  }
-
-  useEffect(() => {
-    void loadRequesters();
-  }, []);
-
-  async function handleCheck() {
-    setState("loading");
-    try {
-      const result = await checkSystem();
-      setCategories(result.categories);
-      setState("success");
-    } catch {
-      setState("error");
-      setCategories([]);
-    }
-  }
-
-  function handleChangeRequester() {
-    clearRequester();
-    setSelectionConfirmed(false);
-    setSelectedTicketId(null);
-    setActivePage("tickets");
-  }
-
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">◷</span><span>TokTickIT</span></div>
-        <div className="topbar-nav" aria-label="Primary navigation">
-          <button aria-label="My Tickets" disabled={!selectionConfirmed} className={selectionConfirmed && activePage === "tickets" ? "topbar-link active" : "topbar-link"} onClick={() => { setActivePage("tickets"); setSelectedTicketId(null); }}>&#9776; <span aria-hidden="true">My Tickets</span></button>
-          <button aria-label="Create Ticket" disabled={!selectionConfirmed} className={selectionConfirmed && activePage === "create" ? "topbar-link active" : "topbar-link"} onClick={() => setActivePage("create")}>&#43; <span aria-hidden="true">Create Ticket</span></button>
-        </div>
-        {selectionConfirmed && currentRequester && <div className="requester-chip"><span className="user-mark" aria-hidden="true" /><span>{currentRequester.name}</span><button className="change-requester-button" onClick={handleChangeRequester}>Change Requester</button></div>}
-      </header>
-
-      <main className="page-content">
-      {!selectionConfirmed && <div className="requester-screen-heading"><span className="home-icon" aria-hidden="true">⌂</span><span aria-hidden="true">›</span><strong>Development Requester Selection</strong></div>}
-
-      {!selectionConfirmed && <button className="visually-hidden" onClick={handleCheck} disabled={state === "loading"}>
-        {state === "loading" ? "Loading…" : "Check System"}
-      </button>}
-
-      {state === "loading" && <p className="mt-4 text-secondary">Checking API status...</p>}
-
-      {state === "success" && (
-        <div className="mt-4">
-          <p className="text-success fw-semibold">System Status: Online</p>
-          <ul aria-label="Categories">
-            {categories.map((category) => <li key={category.id}>{category.name}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {state === "error" && (
-        <p className="mt-4 text-danger" role="alert">
-          System Status: Offline. Unable to reach the service desk API. Please try again.
-        </p>
-      )}
-
-      <section className={selectionConfirmed ? "requester-context compact" : "requester-context requester-selection-card"} aria-labelledby="requester-selection-heading">
-        {!selectionConfirmed && <div className="requester-hero-icon" aria-hidden="true" />}
-        <h2 id="requester-selection-heading" className="h5">{selectionConfirmed ? "Development Requester Selection" : "Select Development Requester"}</h2>
-        <p className="text-secondary">Choose a development requester to simulate the current requester context for Lab 2.<br />This is for testing only and is not a login screen.</p>
-        {!selectionConfirmed && <hr />}
-        {requesterState === "loading" && <p role="status">Loading Requesters...</p>}
-        {requesterState === "error" && <div role="status" className="text-danger"><p>Unable to load Development Requesters. Please try again.</p><button className="btn btn-outline-success" onClick={loadRequesters}>Try Again</button></div>}
-        {requesterState === "success" && requesters.length === 0 && <p role="status">No active Development Requesters are available.</p>}
-        {requesterState === "success" && requesters.length > 0 && (
-          <div>
-            <label className="d-block" htmlFor="development-requester">
-              <span className="d-block mb-2">Development Requester <span className="required-mark">*</span></span>
-            </label>
-            <select id="development-requester" aria-label="Development Requester" className="form-select" value={currentRequester?.id ?? ""} onChange={(event) => {
-              const requester = requesters.find((item) => String(item.id) === event.target.value);
-              if (requester) {
-                selectRequester(requester);
-                setSelectionConfirmed(false); setSelectedTicketId(null);
-              }
-            }}>
-              <option value="">Select a Requester</option>
-              {requesters.map((requester) => <option key={requester.id} value={requester.id}>{requester.name} ({requester.email})</option>)}
-            </select>
-            {!selectionConfirmed && <div className="active-requester-note"><span aria-hidden="true">ⓘ</span> Only active development requesters are shown.</div>}
-            <button className="btn btn-success mt-3" disabled={!currentRequester} onClick={() => { setActivePage("tickets"); setSelectionConfirmed(true); }}>Continue</button>
-          </div>
-        )}
-        {selectionConfirmed && currentRequester && <div className="mt-3" role="status"><p className="text-success">Current testing Requester: {currentRequester.name}</p></div>}
-        {!selectionConfirmed && <div className="lab-auth-note"><span className="note-icon" aria-hidden="true">♢</span><div><strong>Authentication coming in Lab 3</strong><p>In Lab 3, this selection will be replaced with secure authentication so you can access the system with your own account.</p></div></div>}
-      </section>
-      {selectionConfirmed && currentRequester && activePage === "create" && <CreateTicket />}
-      {selectionConfirmed && currentRequester && activePage === "tickets" && !selectedTicketId && <MyTickets onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)} />}
-      {selectionConfirmed && currentRequester && activePage === "tickets" && selectedTicketId && <TicketDetail ticketId={selectedTicketId} onBack={() => setSelectedTicketId(null)} />}
-      </main>
-    </div>
-  );
+  const [user, setUser] = useState<AuthUser | null>(getStoredUser()); const [authLoading, setAuthLoading] = useState(Boolean(getAuthToken())); const [activePage, setActivePage] = useState<Page>("tickets"); const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null); const { currentRequester, selectRequester, clearRequester } = useRequester(); const [state, setState] = useState<"idle" | "loading" | "success" | "error">("idle"); const [categories, setCategories] = useState<Category[]>([]);
+  useEffect(() => { if (!getAuthToken()) { setAuthLoading(false); return; } void fetchCurrentUser().then((current) => { setUser(current); selectRequester(current); }).catch(() => { void logout().then(() => setUser(null)); }).finally(() => setAuthLoading(false)); }, [selectRequester]);
+  function handleAuthenticated(authUser: AuthUser) { setUser(authUser); selectRequester(authUser); setSelectedTicketId(null); setActivePage("tickets"); }
+  async function handleLogout() { await logout(); clearRequester(); setUser(null); setSelectedTicketId(null); }
+  async function handleCheck() { setState("loading"); try { const result = await checkSystem(); setCategories(result.categories); setState("success"); } catch { setCategories([]); setState("error"); } }
+  if (authLoading) return <div className="app-shell"><main className="page-content"><p role="status">Checking your session...</p></main></div>;
+  if (!user) return <div className="app-shell"><main className="page-content"><div className="requester-screen-heading"><span className="home-icon" aria-hidden="true">⌂</span><span aria-hidden="true">›</span><strong>Login</strong></div><LoginScreen onLogin={handleAuthenticated} /></main></div>;
+  if (user.mustChangePassword) return <div className="app-shell"><main className="page-content"><div className="requester-screen-heading"><span className="home-icon" aria-hidden="true">⌂</span><span aria-hidden="true">›</span><strong>Change Password</strong></div><ChangePasswordScreen onChanged={handleAuthenticated} /></main></div>;
+  const requester = currentRequester ?? user;
+  return <div className="app-shell"><header className="topbar"><div className="brand"><span className="brand-mark">◈</span><span>TokTickIT</span></div><div className="topbar-nav" aria-label="Primary navigation"><button aria-label="My Tickets" className={activePage === "tickets" ? "topbar-link active" : "topbar-link"} onClick={() => { setActivePage("tickets"); setSelectedTicketId(null); }}>&#9776; <span aria-hidden="true">My Tickets</span></button><button aria-label="Create Ticket" className={activePage === "create" ? "topbar-link active" : "topbar-link"} onClick={() => { setActivePage("create"); setSelectedTicketId(null); }}>&#43; <span aria-hidden="true">Create Ticket</span></button></div><div className="requester-chip"><span className="user-mark" aria-hidden="true" /><span>{requester.name} ({user.role})</span><button className="change-requester-button" onClick={() => void handleLogout()}>Logout</button></div></header><main className="page-content"><button className="visually-hidden" onClick={() => void handleCheck()} disabled={state === "loading"}>Check System</button>{state === "loading" && <p className="mt-4 text-secondary">Checking API status...</p>}{state === "success" && <div className="mt-4"><p className="text-success fw-semibold">System Status: Online</p><ul aria-label="Categories">{categories.map((category) => <li key={category.id}>{category.name}</li>)}</ul></div>}{state === "error" && <p className="mt-4 text-danger" role="alert">System Status: Offline. Please try again.</p>}{activePage === "create" && <CreateTicket />}{activePage === "tickets" && !selectedTicketId && <MyTickets onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)} />}{activePage === "tickets" && selectedTicketId && <TicketDetail ticketId={selectedTicketId} onBack={() => setSelectedTicketId(null)} />}</main></div>;
 }
