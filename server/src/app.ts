@@ -30,6 +30,7 @@ const upload = multer({
   fileFilter: (_req, file, callback) => callback(null, ALLOWED_ATTACHMENT_TYPES.has(file.mimetype) && ALLOWED_ATTACHMENT_EXTENSIONS.has(path.extname(file.originalname).toLowerCase())),
 });
 const attachmentStorage = path.resolve(process.cwd(), "uploads");
+const TICKET_NUMBER_YEAR = "2026";
 
 function safeOriginalName(name: string) {
   const base = path.basename(name).replace(/[\u0000-\u001f\u007f]/g, "").replace(/[^a-zA-Z0-9._ -]/g, "_").trim();
@@ -51,6 +52,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 const requireApplicationUser = [requireAuth, passwordChangeRequired];
 const requireRequester = [requireAuth, passwordChangeRequired, requireRoles("Requester")];
+const requireStaff = [...requireApplicationUser, requireRoles("ITStaff", "Administrator")];
 
 async function legacyRequesterIdForUser(userId: number) {
   const user = await getPrisma().user.findUnique({ where: { id: userId }, select: { email: true } });
@@ -62,6 +64,23 @@ async function legacyRequesterIdForUser(userId: number) {
 function publicCommentResponse(comment: { id: number; content: string; createdAt: Date; author: { id: number; name: string; email: string; role: string } }) {
   return { id: comment.id, content: comment.content, createdAt: comment.createdAt, author: comment.author };
 }
+
+function internalNoteResponse(note: { id: number; content: string; createdAt: Date; author: { id: number; name: string; email: string; role: string } }) {
+  return { id: note.id, content: note.content, createdAt: note.createdAt, author: note.author };
+}
+
+const STAFF_STATUSES = ["New", "Open", "InProgress", "WaitingForRequester", "Resolved", "Closed", "Reopened", "Cancelled"] as const;
+type StaffStatus = (typeof STAFF_STATUSES)[number];
+const STATUS_TRANSITIONS: Record<StaffStatus, readonly StaffStatus[]> = {
+  New: ["Open", "Cancelled"],
+  Open: ["InProgress", "WaitingForRequester", "Cancelled"],
+  InProgress: ["WaitingForRequester", "Resolved", "Cancelled"],
+  WaitingForRequester: ["InProgress", "Resolved", "Cancelled"],
+  Resolved: ["Closed", "Reopened"],
+  Closed: ["Reopened"],
+  Reopened: ["InProgress", "Resolved", "Cancelled"],
+  Cancelled: ["Reopened"],
+};
 
 function authBody(req: Request) {
   return isRecord(req.body) ? req.body : {};
@@ -238,6 +257,7 @@ app.post("/api/tickets", ...requireRequester, async (req: AuthenticatedRequest, 
         summary,
         description,
         requestedPriority: requestedPriority as (typeof ALLOWED_PRIORITIES)[number],
+        itPriority: requestedPriority as (typeof ALLOWED_PRIORITIES)[number],
         currentStatus: "New",
         idempotencyKey,
         requestFingerprint: fingerprint,
@@ -247,7 +267,7 @@ app.post("/api/tickets", ...requireRequester, async (req: AuthenticatedRequest, 
         relatedSystemId,
       },
     });
-    const ticketNumber = `TK-${created.ticketDate.getUTCFullYear()}-${String(created.id).padStart(6, "0")}`;
+    const ticketNumber = `TK-${TICKET_NUMBER_YEAR}-${String(created.id).padStart(6, "0")}`;
     const ticket = await prisma.ticket.update({
       where: { id: created.id },
       data: { ticketNumber },
@@ -405,6 +425,83 @@ app.post("/api/tickets/:ticketId/problem-resolved", ...requireRequester, async (
     const updated = await getPrisma().ticket.update({ where: { id: ticketId }, data: { problemAppearsResolvedAt: new Date(), problemAppearsResolvedById: req.user!.id }, select: { id: true, problemAppearsResolvedAt: true } });
     res.status(200).json({ problemAppearsResolvedAt: updated.problemAppearsResolvedAt });
   } catch { res.status(500).json({ error: { code: "RESOLUTION_INDICATION_ERROR", message: "Unable to record the resolution indication." } }); }
+});
+
+app.get("/api/staff/tickets", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const search = queryString(req.query.search)?.trim() ?? "";
+  const status = queryString(req.query.status);
+  const priority = queryString(req.query.priority);
+  const owner = queryString(req.query.owner);
+  const sortBy = queryString(req.query.sortBy) ?? "updatedAt";
+  const sortDirection = queryString(req.query.sortDirection) === "asc" ? "asc" : "desc";
+  const page = Number(queryString(req.query.page) ?? "1");
+  const pageSize = Number(queryString(req.query.pageSize) ?? "10");
+  const validSort = ["updatedAt", "ticketDate", "ticketNumber", "summary", "itPriority", "currentStatus"].includes(sortBy);
+  const validStatus = status === undefined || STAFF_STATUSES.includes(status as StaffStatus);
+  const validPriority = priority === undefined || ALLOWED_PRIORITIES.includes(priority as (typeof ALLOWED_PRIORITIES)[number]);
+  if (!validSort || !validStatus || !validPriority || !Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) { res.status(400).json({ error: { code: "INVALID_QUEUE_QUERY", message: "Invalid queue query." } }); return; }
+  const ownerFilter = owner === undefined || owner === "all" ? undefined : owner === "unassigned" ? null : Number(owner);
+  if (owner !== undefined && owner !== "all" && owner !== "unassigned" && (!Number.isInteger(ownerFilter) || (ownerFilter as number) < 1)) { res.status(400).json({ error: { code: "INVALID_QUEUE_QUERY", message: "Invalid owner filter." } }); return; }
+  const where: Prisma.TicketWhereInput = { ...(search ? { OR: [{ ticketNumber: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }, { requester: { name: { contains: search, mode: "insensitive" } } }] } : {}), ...(status ? { currentStatus: status as StaffStatus } : {}), ...(priority ? { itPriority: priority as (typeof ALLOWED_PRIORITIES)[number] } : {}), ...(ownerFilter === null ? { ownerId: null } : ownerFilter === undefined ? {} : { ownerId: ownerFilter }) };
+  try {
+    const prisma = getPrisma();
+    const [totalItems, data] = await Promise.all([prisma.ticket.count({ where }), prisma.ticket.findMany({ where, orderBy: { [sortBy]: sortDirection }, skip: (page - 1) * pageSize, take: pageSize, select: { id: true, ticketNumber: true, summary: true, requestedPriority: true, itPriority: true, currentStatus: true, ticketDate: true, updatedAt: true, requester: { select: { id: true, name: true, email: true } }, owner: { select: { id: true, name: true, email: true, role: true } }, category: { select: { id: true, name: true } }, relatedSystem: { select: { id: true, name: true } } } })]);
+    res.status(200).json({ data, pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } });
+  } catch { res.status(500).json({ error: { code: "QUEUE_ERROR", message: "Unable to load the IT Staff Queue." } }); }
+});
+
+app.get("/api/staff/owners", ...requireStaff, async (_req: AuthenticatedRequest, res: Response) => {
+  try { const owners = await getPrisma().user.findMany({ where: { active: true, role: { in: ["ITStaff", "Administrator"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, role: true } }); res.status(200).json(owners); } catch { res.status(500).json({ error: { code: "OWNER_LIST_ERROR", message: "Unable to load Ticket owners." } }); }
+});
+
+app.get("/api/staff/tickets/:ticketId", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  if (!Number.isInteger(ticketId) || ticketId < 1) { res.status(400).json({ error: { code: "INVALID_TICKET", message: "Invalid Ticket ID." } }); return; }
+  try {
+    const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { id: true, ticketNumber: true, ticketDate: true, summary: true, description: true, requestedPriority: true, itPriority: true, currentStatus: true, createdAt: true, updatedAt: true, requester: { select: { id: true, name: true, email: true } }, owner: { select: { id: true, name: true, email: true, role: true } }, category: { select: { id: true, name: true } }, relatedSystem: { select: { id: true, name: true } }, problemAppearsResolvedAt: true, attachments: { orderBy: { createdAt: "asc" }, select: { id: true, originalName: true, mimeType: true, sizeBytes: true, createdAt: true, removedAt: true, removalReason: true } }, publicComments: { orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } }, internalNotes: { orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } } } });
+    if (!ticket) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; }
+    res.status(200).json(ticket);
+  } catch { res.status(500).json({ error: { code: "STAFF_TICKET_ERROR", message: "Unable to load Ticket Detail." } }); }
+});
+
+app.patch("/api/staff/tickets/:ticketId/owner", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); const body = authBody(req); const ownerId = !Object.prototype.hasOwnProperty.call(body, "ownerId") ? req.user!.id : body.ownerId === null ? null : Number(body.ownerId);
+  if (!Number.isInteger(ticketId) || ticketId < 1 || (ownerId !== null && (!Number.isInteger(ownerId) || ownerId < 1))) { res.status(400).json({ error: { code: "INVALID_OWNER", message: "Owner must be an active IT Staff or Administrator." } }); return; }
+  try { const owner = ownerId === null ? null : await getPrisma().user.findFirst({ where: { id: ownerId, active: true, role: { in: ["ITStaff", "Administrator"] } }, select: { id: true, name: true, email: true, role: true } }); if (ownerId !== null && !owner) { res.status(422).json({ error: { code: "INVALID_OWNER", message: "Owner must be an active IT Staff or Administrator." } }); return; } const ticket = await getPrisma().ticket.update({ where: { id: ticketId }, data: { ownerId }, select: { id: true, owner: { select: { id: true, name: true, email: true, role: true } } } }); res.status(200).json(ticket); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
+});
+
+app.patch("/api/staff/tickets/:ticketId/priority", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); const body = authBody(req); const priority = body.itPriority ?? body.priority;
+  if (!Number.isInteger(ticketId) || !ALLOWED_PRIORITIES.includes(priority as (typeof ALLOWED_PRIORITIES)[number])) { res.status(400).json({ error: { code: "INVALID_PRIORITY", message: "Invalid IT Priority." } }); return; }
+  try { const ticket = await getPrisma().ticket.update({ where: { id: ticketId }, data: { itPriority: priority as (typeof ALLOWED_PRIORITIES)[number] }, select: { id: true, itPriority: true } }); res.status(200).json(ticket); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
+});
+
+app.patch("/api/staff/tickets/:ticketId/status", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); const nextStatus = authBody(req).status as StaffStatus;
+  if (!Number.isInteger(ticketId) || !STAFF_STATUSES.includes(nextStatus)) { res.status(400).json({ error: { code: "INVALID_STATUS", message: "Invalid Ticket status." } }); return; }
+  try { const existing = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { currentStatus: true } }); if (!existing) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; } if (!STATUS_TRANSITIONS[existing.currentStatus as StaffStatus].includes(nextStatus)) { res.status(422).json({ error: { code: "INVALID_STATUS_TRANSITION", message: `Cannot change status from ${existing.currentStatus} to ${nextStatus}.` } }); return; } const ticket = await getPrisma().ticket.update({ where: { id: ticketId }, data: { currentStatus: nextStatus }, select: { id: true, currentStatus: true, updatedAt: true } }); res.status(200).json(ticket); } catch { res.status(500).json({ error: { code: "STATUS_UPDATE_ERROR", message: "Unable to update Ticket status." } }); }
+});
+
+app.post("/api/staff/tickets/:ticketId/comments", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); const content = typeof authBody(req).content === "string" ? String(authBody(req).content).trim() : "";
+  if (!Number.isInteger(ticketId) || ticketId < 1 || content.length < 1 || content.length > 2000) { res.status(400).json({ error: { code: "INVALID_COMMENT", message: "Comment content must be between 1 and 2000 characters." } }); return; }
+  try { const comment = await getPrisma().publicComment.create({ data: { ticketId, authorId: req.user!.id, content }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } }); res.status(201).json(publicCommentResponse(comment)); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
+});
+
+app.get("/api/staff/tickets/:ticketId/comments", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); if (!Number.isInteger(ticketId) || ticketId < 1) { res.status(400).json({ error: { code: "INVALID_TICKET", message: "Invalid Ticket ID." } }); return; }
+  try { const comments = await getPrisma().publicComment.findMany({ where: { ticketId }, orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } }); res.status(200).json(comments.map(publicCommentResponse)); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
+});
+
+app.post("/api/staff/tickets/:ticketId/notes", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); const content = typeof authBody(req).content === "string" ? String(authBody(req).content).trim() : "";
+  if (!Number.isInteger(ticketId) || ticketId < 1 || content.length < 1 || content.length > 2000) { res.status(400).json({ error: { code: "INVALID_NOTE", message: "Internal Note content must be between 1 and 2000 characters." } }); return; }
+  try { const note = await getPrisma().internalNote.create({ data: { ticketId, authorId: req.user!.id, content }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } }); res.status(201).json(internalNoteResponse(note)); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
+});
+
+app.get("/api/staff/tickets/:ticketId/notes", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId); if (!Number.isInteger(ticketId) || ticketId < 1) { res.status(400).json({ error: { code: "INVALID_TICKET", message: "Invalid Ticket ID." } }); return; }
+  try { const notes = await getPrisma().internalNote.findMany({ where: { ticketId }, orderBy: { createdAt: "asc" }, select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true, email: true, role: true } } } }); res.status(200).json(notes.map(internalNoteResponse)); } catch { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); }
 });
 
 function attachmentRequesterId(req: Request) {

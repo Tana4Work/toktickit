@@ -25,7 +25,7 @@ Tests are planned before implementation is considered complete. Each test follow
 | REG-01 | API/UI | AC-03 | Requester Ticket and Attachment regression without selector | `server/tests/lab-03/requester-regression.api.test.ts` |
 | REG-02 | API/UI | AC-06 | Public Comments and resolution indication | `server/tests/lab-03/comments.api.test.ts` |
 | QUEUE-01 | API/UI | AC-05 | Queue search, filters, sorting, pagination, and states | `server/tests/lab-03/staff-queue.api.test.ts`, `client/tests/lab-03/StaffTicketQueue.test.tsx` |
-| STAFF-01 | API/UI | AC-05/06 | Ownership, priority, statuses, comments, notes, and Attachments | `server/tests/lab-03/staff-ticket-detail.api.test.ts`, `client/tests/lab-03/StaffTicketDetail.test.tsx` |
+| STAFF-01 | API/UI | AC-05/06 | Queue, ownership, priority, statuses, comments, notes, and Attachments | `server/tests/lab-03/staff-ticket-workflow.api.test.ts`, `client/tests/lab-03/StaffTicketDetail.test.tsx` |
 | ADMIN-01 | API/UI | AC-07 | User list, search, optional role filter, create, edit | `server/tests/lab-03/users-admin.api.test.ts`, `client/tests/lab-03/UserManagement.test.tsx` |
 | ADMIN-02 | API | AC-07 | Duplicate email, one role, activation, self-deactivation, last active Administrator | `server/tests/lab-03/users-admin.api.test.ts` |
 | STYLE-01 | Visual | AC-09 | Zen Green tokens, badges, editable/read-only fields, validation | `client/tests/lab-03/ZenGreen.visual.test.tsx` |
