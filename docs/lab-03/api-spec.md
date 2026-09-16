@@ -32,6 +32,8 @@ Continue all Lab 2 Ticket and Attachment APIs, but derive ownership from the aut
 
 ## IT Staff APIs
 
+IT Staff and Administrators may use these endpoints after authentication and password change. Queue results support `search`, `status`, `priority`, `owner` (`all`, `unassigned`, or a User ID), `sortBy`, `sortDirection`, `page`, and `pageSize`. Owner assignment accepts active IT Staff or Administrator users only. IT Priority starts equal to Requested Priority. Statuses are `New`, `Open`, `InProgress`, `WaitingForRequester`, `Resolved`, `Closed`, `Reopened`, and `Cancelled`; invalid transitions return `422`.
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/staff/tickets` | Queue retrieval with documented search, filters, sorting, pagination, and metadata. |

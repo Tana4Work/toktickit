@@ -56,6 +56,7 @@ export interface RelatedSystem {
 }
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type TicketStatus = "New" | "Open" | "InProgress" | "WaitingForRequester" | "Resolved" | "Closed" | "Reopened" | "Cancelled";
 
 export interface CreateTicketInput {
   requesterId: number;
@@ -118,6 +119,36 @@ export interface PublicComment {
   createdAt: string;
   author: Pick<AuthUser, "id" | "name" | "email" | "role">;
 }
+
+export interface InternalNote {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: Pick<AuthUser, "id" | "name" | "email" | "role">;
+}
+
+export interface StaffTicketListItem extends TicketListItem {
+  itPriority: TicketPriority;
+  currentStatus: TicketStatus;
+  requester: DevelopmentRequester;
+  owner: Pick<AuthUser, "id" | "name" | "email" | "role"> | null;
+}
+
+export interface StaffTicketDetail extends StaffTicketListItem {
+  description: string;
+  createdAt: string;
+  problemAppearsResolvedAt?: string | null;
+  attachments: TicketAttachmentMetadata[];
+  publicComments: PublicComment[];
+  internalNotes: InternalNote[];
+}
+
+export interface StaffQueueResponse {
+  data: StaffTicketListItem[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+export type StaffOwner = Pick<AuthUser, "id" | "name" | "email" | "role">;
 
 async function fetchJson<T>(path: string): Promise<T> {
   const token = getAuthToken();
@@ -220,6 +251,43 @@ export async function indicateProblemResolved(ticketId: number): Promise<{ probl
   const payload = await response.json() as unknown;
   if (!response.ok) throw new Error(errorMessage(payload, "Unable to record the resolution indication."));
   return payload as { problemAppearsResolvedAt: string };
+}
+
+export async function fetchStaffTickets(params = new URLSearchParams()): Promise<StaffQueueResponse> {
+  return fetchJson<StaffQueueResponse>(`/api/staff/tickets?${params.toString()}`);
+}
+
+export async function fetchStaffOwners(): Promise<StaffOwner[]> {
+  return fetchJson<StaffOwner[]>("/api/staff/owners");
+}
+
+export async function fetchStaffTicket(ticketId: number): Promise<StaffTicketDetail> {
+  return fetchJson<StaffTicketDetail>(`/api/staff/tickets/${ticketId}`);
+}
+
+async function patchStaff<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to update the Ticket."));
+  return payload as T;
+}
+
+export function updateStaffTicketOwner(ticketId: number, ownerId: number | null) { return patchStaff<{ id: number }>(`/api/staff/tickets/${ticketId}/owner`, { ownerId }); }
+export function updateStaffTicketPriority(ticketId: number, itPriority: TicketPriority) { return patchStaff<{ id: number; itPriority: TicketPriority }>(`/api/staff/tickets/${ticketId}/priority`, { itPriority }); }
+export function updateStaffTicketStatus(ticketId: number, status: TicketStatus) { return patchStaff<{ id: number; currentStatus: TicketStatus }>(`/api/staff/tickets/${ticketId}/status`, { status }); }
+
+export async function addStaffPublicComment(ticketId: number, content: string): Promise<PublicComment> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Public Comment."));
+  return payload as PublicComment;
+}
+
+export async function addInternalNote(ticketId: number, content: string): Promise<InternalNote> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/notes`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Internal Note."));
+  return payload as InternalNote;
 }
 
 export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {
