@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { addPublicComment, attachmentDownloadUrl, fetchTicket, indicateProblemResolved, removeAttachment, TicketDetail as TicketDetailData, uploadAttachment } from "./api.js";
+import { addPublicComment, attachmentDownloadUrl, downloadAttachment, fetchTicket, indicateProblemResolved, removeAttachment, TicketDetail as TicketDetailData, uploadAttachment } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 
 type TicketDetailProps = { ticketId: number; onBack: () => void };
@@ -23,6 +23,19 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
     void fetchTicket(ticketId, currentRequester.id).then((loadedTicket) => { if (mounted) { setTicket(loadedTicket); setState("ready"); } }).catch(() => { if (mounted) setState("error"); });
     return () => { mounted = false; };
   }, [ticketId, currentRequester]);
+
+  useEffect(() => {
+    if (!ticket || !currentRequester) return;
+    const activeAttachments = ticket.attachments.filter((attachment) => !attachment.removedAt);
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".attachment-panel a.attachment-action"));
+    const handlers = links.map((link, index) => {
+      const attachment = activeAttachments[index];
+      const handler = (event: Event) => { event.preventDefault(); if (attachment) void handleDownload(attachment.id, attachment.originalName); };
+      link.addEventListener("click", handler);
+      return { link, handler };
+    });
+    return () => handlers.forEach(({ link, handler }) => link.removeEventListener("click", handler));
+  }, [ticket, currentRequester]);
 
   async function handleRemove(attachmentId: number) {
     if (!currentRequester) return;
@@ -73,6 +86,12 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
     if (!ticket) return;
     setActionError("");
     try { await indicateProblemResolved(ticket.id); setTicket(await fetchTicket(ticketId, currentRequester!.id)); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to record the resolution indication."); }
+  }
+
+  async function handleDownload(attachmentId: number, fileName: string) {
+    if (!currentRequester) return;
+    setActionError("");
+    try { await downloadAttachment(attachmentId, currentRequester.id, fileName); } catch (error) { setActionError(error instanceof Error ? error.message : "Unable to download attachment."); }
   }
 
   if (state === "loading") return <section className="content-card" aria-labelledby="ticket-detail-heading"><h2 id="ticket-detail-heading">Ticket Detail</h2><p role="status">Loading ticket detail...</p></section>;

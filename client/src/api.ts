@@ -290,6 +290,39 @@ export async function addInternalNote(ticketId: number, content: string): Promis
   return payload as InternalNote;
 }
 
+export interface ManagedUser extends AuthUser {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminUserListResponse {
+  data: ManagedUser[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+export interface AdminUserInput {
+  name: string;
+  email: string;
+  role: UserRole;
+  active: boolean;
+  initialPassword?: string;
+}
+
+export async function fetchAdminUsers(params = new URLSearchParams()): Promise<AdminUserListResponse> {
+  return fetchJson<AdminUserListResponse>(`/api/admin/users?${params.toString()}`);
+}
+
+async function adminMutation<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to update user."));
+  return payload as T;
+}
+
+export function createAdminUser(input: AdminUserInput) { return adminMutation<ManagedUser>("/api/admin/users", "POST", input); }
+export function updateAdminUser(userId: number, input: Partial<AdminUserInput>) { return adminMutation<ManagedUser>(`/api/admin/users/${userId}`, "PATCH", input); }
+export function resetAdminInitialPassword(userId: number, initialPassword: string) { return adminMutation<ManagedUser>(`/api/admin/users/${userId}/initial-password`, "POST", { initialPassword }); }
+
 export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {
   const form = new FormData(); form.append("file", file);
   const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: form });
@@ -307,6 +340,26 @@ export async function removeAttachment(attachmentId: number, requesterId: number
 
 export function attachmentDownloadUrl(attachmentId: number, requesterId: number) {
   return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
+
+export async function downloadAttachment(attachmentId: number, requesterId: number, fileName: string) {
+  const response = await fetch(attachmentDownloadUrl(attachmentId, requesterId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  if (!response.ok) throw new Error("Unable to download attachment.");
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a"); link.href = objectUrl; link.download = fileName; link.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export function staffAttachmentDownloadUrl(attachmentId: number) {
+  return `${API_URL}/api/staff/attachments/${attachmentId}/download`;
+}
+
+export async function downloadStaffAttachment(attachmentId: number, fileName: string) {
+  const response = await fetch(staffAttachmentDownloadUrl(attachmentId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  if (!response.ok) throw new Error("Unable to download attachment.");
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a"); link.href = objectUrl; link.download = fileName; link.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export interface SystemStatus {

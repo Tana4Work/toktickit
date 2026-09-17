@@ -16,7 +16,7 @@ beforeAll(async () => {
   const category = await prisma.category.findFirstOrThrow({ where: { active: true } });
   const system = await prisma.relatedSystem.findFirstOrThrow({ where: { active: true } });
   const legacyRequester = await prisma.developmentRequester.findUniqueOrThrow({ where: { email: requester.email } });
-  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-2026-${String(Date.now() % 1000000).padStart(6, "0")}`, ticketDate: new Date(), summary: "Docking station is not detected", description: "Ticket used to verify the staff queue and detail workflow.", requestedPriority: "HIGH", itPriority: "HIGH", currentStatus: "New", idempotencyKey: `staff-${Date.now()}`, requestFingerprint: "staff-workflow", requesterId: legacyRequester.id, requesterUserId: requester.id, categoryId, relatedSystemId } });
+  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-2026-${String(Date.now() % 1000000).padStart(6, "0")}`, ticketDate: new Date(), summary: "Docking station is not detected", description: "Ticket used to verify the staff queue and detail workflow.", requestedPriority: "HIGH", itPriority: "HIGH", currentStatus: "New", idempotencyKey: `staff-${Date.now()}`, requestFingerprint: "staff-workflow", requesterId: legacyRequester.id, requesterUserId: requester.id, categoryId: category.id, relatedSystemId: system.id } });
   ticketId = ticket.id;
   staffToken = (await request(app).post("/api/auth/login").send({ email: staff.email, password: "ITStaff123!" })).body.token;
   requesterToken = (await request(app).post("/api/auth/login").send({ email: requester.email, password: "Requester123!" })).body.token;
@@ -26,7 +26,7 @@ afterAll(async () => { await prisma.internalNote.deleteMany({ where: { ticketId 
 
 describe("IT Staff Queue and Ticket Detail workflow", () => {
   it("returns a searchable Queue and Ticket Detail for staff", async () => {
-    const queue = await request(app).get("/api/staff/tickets?search=Staff%20workflow&pageSize=10").set("Authorization", `Bearer ${staffToken}`);
+    const queue = await request(app).get("/api/staff/tickets?search=Docking%20station&pageSize=10").set("Authorization", `Bearer ${staffToken}`);
     expect(queue.status).toBe(200);
     expect(queue.body.data.some((item: { id: number; itPriority: string }) => item.id === ticketId && item.itPriority === "HIGH")).toBe(true);
     const detail = await request(app).get(`/api/staff/tickets/${ticketId}`).set("Authorization", `Bearer ${staffToken}`);

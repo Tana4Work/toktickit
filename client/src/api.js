@@ -170,6 +170,19 @@ export async function addInternalNote(ticketId, content) {
         throw new Error(errorMessage(payload, "Unable to add Internal Note."));
     return payload;
 }
+export async function fetchAdminUsers(params = new URLSearchParams()) {
+    return fetchJson(`/api/admin/users?${params.toString()}`);
+}
+async function adminMutation(path, method, body) {
+    const response = await fetch(`${API_URL}${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
+    const payload = await response.json();
+    if (!response.ok)
+        throw new Error(errorMessage(payload, "Unable to update user."));
+    return payload;
+}
+export function createAdminUser(input) { return adminMutation("/api/admin/users", "POST", input); }
+export function updateAdminUser(userId, input) { return adminMutation(`/api/admin/users/${userId}`, "PATCH", input); }
+export function resetAdminInitialPassword(userId, initialPassword) { return adminMutation(`/api/admin/users/${userId}/initial-password`, "POST", { initialPassword }); }
 export async function uploadAttachment(ticketId, requesterId, file) {
     const form = new FormData();
     form.append("file", file);
@@ -188,6 +201,31 @@ export async function removeAttachment(attachmentId, requesterId, reason) {
 }
 export function attachmentDownloadUrl(attachmentId, requesterId) {
     return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
+export async function downloadAttachment(attachmentId, requesterId, fileName) {
+    const response = await fetch(attachmentDownloadUrl(attachmentId, requesterId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+    if (!response.ok)
+        throw new Error("Unable to download attachment.");
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+}
+export function staffAttachmentDownloadUrl(attachmentId) {
+    return `${API_URL}/api/staff/attachments/${attachmentId}/download`;
+}
+export async function downloadStaffAttachment(attachmentId, fileName) {
+    const response = await fetch(staffAttachmentDownloadUrl(attachmentId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+    if (!response.ok)
+        throw new Error("Unable to download attachment.");
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
 }
 // Issue 2 + Issue 4 — call the backend.
 // Steps: fetch `${API_URL}/api/health`; if not ok, throw.
