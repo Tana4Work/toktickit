@@ -3,7 +3,8 @@ import cors from "cors";
 import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import multer from "multer";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
@@ -29,7 +30,15 @@ const upload = multer({
   limits: { fileSize: MAX_ATTACHMENT_SIZE },
   fileFilter: (_req, file, callback) => callback(null, ALLOWED_ATTACHMENT_TYPES.has(file.mimetype) && ALLOWED_ATTACHMENT_EXTENSIONS.has(path.extname(file.originalname).toLowerCase())),
 });
-const attachmentStorage = path.resolve(process.cwd(), "uploads");
+// Use the OS temp directory for local development because the workspace
+// uploads folder may be read-only under the managed Windows runtime.
+const attachmentStorage = path.join(tmpdir(), "toktickit-uploads");
+const legacyAttachmentStorage = path.resolve(process.cwd(), "uploads");
+
+async function storedAttachmentPath(storageKey: string) {
+  const newPath = path.resolve(attachmentStorage, storageKey);
+  try { await access(newPath); return newPath; } catch { return path.resolve(legacyAttachmentStorage, storageKey); }
+}
 const TICKET_NUMBER_YEAR = "2026";
 
 function safeOriginalName(name: string) {
@@ -509,6 +518,107 @@ function attachmentRequesterId(req: Request) {
   return Number.isInteger(requesterId) && requesterId > 0 ? requesterId : null;
 }
 
+const ADMIN_USER_ROLES = ["Requester", "ITStaff", "Administrator"] as const;
+type AdminUserRole = (typeof ADMIN_USER_ROLES)[number];
+const requireAdministrator = [...requireApplicationUser, requireRoles("Administrator")];
+
+function adminUserResponse(user: { id: number; name: string; email: string; role: string; active: boolean; mustChangePassword: boolean; createdAt: Date; updatedAt: Date }) {
+  return { id: user.id, name: user.name, email: user.email, role: user.role, active: user.active, mustChangePassword: user.mustChangePassword, createdAt: user.createdAt, updatedAt: user.updatedAt };
+}
+
+function validAdminRole(value: unknown): value is AdminUserRole {
+  return typeof value === "string" && ADMIN_USER_ROLES.includes(value as AdminUserRole);
+}
+
+function validEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+app.get("/api/admin/users", ...requireAdministrator, async (req: AuthenticatedRequest, res: Response) => {
+  const search = queryString(req.query.search)?.trim() ?? "";
+  const role = queryString(req.query.role);
+  const page = Number(queryString(req.query.page) ?? "1");
+  const pageSize = Number(queryString(req.query.pageSize) ?? "10");
+  if ((role !== undefined && !validAdminRole(role)) || !Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    res.status(400).json({ error: { code: "INVALID_USER_QUERY", message: "Invalid user list query." } });
+    return;
+  }
+  const where: Prisma.UserWhereInput = { ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { email: { contains: search, mode: "insensitive" } }] } : {}), ...(role ? { role: role as AdminUserRole } : {}) };
+  try {
+    const prisma = getPrisma();
+    const [totalItems, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({ where, orderBy: [{ name: "asc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: { id: true, name: true, email: true, role: true, active: true, mustChangePassword: true, createdAt: true, updatedAt: true } }),
+    ]);
+    res.status(200).json({ data: users.map(adminUserResponse), pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } });
+  } catch { res.status(500).json({ error: { code: "USER_LIST_ERROR", message: "Unable to load users." } }); }
+});
+
+app.get("/api/staff/attachments/:attachmentId/download", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const attachmentId = Number(req.params.attachmentId);
+  if (!Number.isInteger(attachmentId) || attachmentId < 1) { res.status(400).json({ error: { code: "INVALID_ATTACHMENT", message: "Invalid attachment ID." } }); return; }
+  try {
+    const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, removedAt: null, ticket: { id: { gt: 0 } } } });
+    if (!attachment) { res.status(404).json({ error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." } }); return; }
+    const safePath = await storedAttachmentPath(attachment.storageKey);
+    if (![attachmentStorage, legacyAttachmentStorage].includes(path.dirname(safePath))) { res.status(404).json({ error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." } }); return; }
+    res.download(safePath, attachment.originalName, (error) => { if (error && !res.headersSent) res.status(404).json({ error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." } }); });
+  } catch { res.status(500).json({ error: { code: "ATTACHMENT_DOWNLOAD_ERROR", message: "Unable to download attachment." } }); }
+});
+
+app.post("/api/admin/users", ...requireAdministrator, async (req: AuthenticatedRequest, res: Response) => {
+  const body = authBody(req);
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const role = body.role;
+  const password = body.initialPassword ?? body.password;
+  const active = body.active === undefined ? true : body.active;
+  if (name.length < 2 || name.length > 120 || !validEmail(email) || !validAdminRole(role) || typeof active !== "boolean" || !isValidPassword(password)) {
+    res.status(400).json({ error: { code: "INVALID_USER", message: "Name, email, role, active state, and an 8-128 character initial password are required." } });
+    return;
+  }
+  try {
+    const user = await getPrisma().user.create({ data: { name, email, role, active, passwordHash: hashPassword(password), mustChangePassword: true }, select: { id: true, name: true, email: true, role: true, active: true, mustChangePassword: true, createdAt: true, updatedAt: true } });
+    res.status(201).json(adminUserResponse(user));
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") { res.status(409).json({ error: { code: "DUPLICATE_EMAIL", message: "A user with this email already exists." } }); return; }
+    res.status(500).json({ error: { code: "USER_CREATE_ERROR", message: "Unable to create user." } });
+  }
+});
+
+app.patch("/api/admin/users/:userId", ...requireAdministrator, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = Number(req.params.userId); const body = authBody(req);
+  if (!Number.isInteger(userId) || userId < 1) { res.status(400).json({ error: { code: "INVALID_USER", message: "Invalid user ID." } }); return; }
+  const current = await getPrisma().user.findUnique({ where: { id: userId } });
+  if (!current) { res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found." } }); return; }
+  const name = body.name === undefined ? current.name : typeof body.name === "string" ? body.name.trim() : "";
+  const email = body.email === undefined ? current.email : typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const role = body.role === undefined ? current.role : body.role;
+  const active = body.active === undefined ? current.active : body.active;
+  if (name.length < 2 || name.length > 120 || !validEmail(email) || !validAdminRole(role) || typeof active !== "boolean") { res.status(400).json({ error: { code: "INVALID_USER", message: "Name, email, role, and active state are invalid." } }); return; }
+  if (userId === req.user!.id && !active) { res.status(422).json({ error: { code: "SELF_DEACTIVATION", message: "You cannot deactivate your own account." } }); return; }
+  if (current.role === "Administrator" && current.active && (!active || role !== "Administrator")) {
+    const remaining = await getPrisma().user.count({ where: { role: "Administrator", active: true, id: { not: userId } } });
+    if (remaining < 1) { res.status(422).json({ error: { code: "LAST_ADMINISTRATOR", message: "At least one active Administrator must remain." } }); return; }
+  }
+  try {
+    const user = await getPrisma().user.update({ where: { id: userId }, data: { name, email, role, active }, select: { id: true, name: true, email: true, role: true, active: true, mustChangePassword: true, createdAt: true, updatedAt: true } });
+    res.status(200).json(adminUserResponse(user));
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") { res.status(409).json({ error: { code: "DUPLICATE_EMAIL", message: "A user with this email already exists." } }); return; }
+    res.status(500).json({ error: { code: "USER_UPDATE_ERROR", message: "Unable to update user." } });
+  }
+});
+
+app.post("/api/admin/users/:userId/initial-password", ...requireAdministrator, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = Number(req.params.userId); const password = authBody(req).initialPassword ?? authBody(req).password;
+  if (!Number.isInteger(userId) || userId < 1 || !isValidPassword(password)) { res.status(400).json({ error: { code: "INVALID_PASSWORD", message: "Initial password must be 8-128 characters." } }); return; }
+  try {
+    const user = await getPrisma().user.update({ where: { id: userId }, data: { passwordHash: hashPassword(password), mustChangePassword: true }, select: { id: true, name: true, email: true, role: true, active: true, mustChangePassword: true, createdAt: true, updatedAt: true } });
+    res.status(200).json(adminUserResponse(user));
+  } catch { res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found." } }); }
+});
+
 app.post("/api/tickets/:ticketId/attachments", ...requireRequester, (req: AuthenticatedRequest, res: Response) => {
   upload.single("file")(req, res, async (error) => {
     const ticketId = Number(req.params.ticketId);
@@ -569,8 +679,8 @@ app.get("/api/attachments/:attachmentId/download", ...requireRequester, async (r
   try {
     const attachment = await getPrisma().attachment.findFirst({ where: { id: attachmentId, removedAt: null, ticket: { OR: [{ requesterUserId: req.user!.id }, { requesterId }] } } });
     if (!attachment) { res.status(404).json({ error: "Attachment not found." }); return; }
-    const safePath = path.resolve(attachmentStorage, attachment.storageKey);
-    if (path.dirname(safePath) !== attachmentStorage) { res.status(404).json({ error: "Attachment not found." }); return; }
+    const safePath = await storedAttachmentPath(attachment.storageKey);
+    if (![attachmentStorage, legacyAttachmentStorage].includes(path.dirname(safePath))) { res.status(404).json({ error: "Attachment not found." }); return; }
     res.download(safePath, attachment.originalName, (error) => { if (error && !res.headersSent) res.status(404).json({ error: "Attachment not found." }); });
   } catch { res.status(500).json({ error: "Unable to download attachment." }); }
 });
@@ -586,7 +696,7 @@ app.delete("/api/attachments/:attachmentId", ...requireRequester, async (req: Au
     if (!attachment) { res.status(404).json({ error: "Attachment not found." }); return; }
     if (attachment.removedAt) { res.status(409).json({ error: "Attachment has already been removed." }); return; }
     const removed = await getPrisma().attachment.update({ where: { id: attachmentId }, data: { removedAt: new Date(), removalReason: reason } });
-    await unlink(path.join(attachmentStorage, attachment.storageKey)).catch(() => undefined);
+    await unlink(await storedAttachmentPath(attachment.storageKey)).catch(() => undefined);
     res.status(200).json(attachmentResponse(removed));
   } catch { res.status(500).json({ error: "Unable to remove attachment." }); }
 });

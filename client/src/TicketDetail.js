@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
-import { addPublicComment, attachmentDownloadUrl, fetchTicket, indicateProblemResolved, removeAttachment, uploadAttachment } from "./api.js";
+import { addPublicComment, attachmentDownloadUrl, downloadAttachment, fetchTicket, indicateProblemResolved, removeAttachment, uploadAttachment } from "./api.js";
 import { useRequester } from "./requesterContext.js";
 export default function TicketDetail({ ticketId, onBack }) {
     const { currentRequester } = useRequester();
@@ -25,6 +25,20 @@ export default function TicketDetail({ ticketId, onBack }) {
             setState("error"); });
         return () => { mounted = false; };
     }, [ticketId, currentRequester]);
+    useEffect(() => {
+        if (!ticket || !currentRequester)
+            return;
+        const activeAttachments = ticket.attachments.filter((attachment) => !attachment.removedAt);
+        const links = Array.from(document.querySelectorAll(".attachment-panel a.attachment-action"));
+        const handlers = links.map((link, index) => {
+            const attachment = activeAttachments[index];
+            const handler = (event) => { event.preventDefault(); if (attachment)
+                void handleDownload(attachment.id, attachment.originalName); };
+            link.addEventListener("click", handler);
+            return { link, handler };
+        });
+        return () => handlers.forEach(({ link, handler }) => link.removeEventListener("click", handler));
+    }, [ticket, currentRequester]);
     async function handleRemove(attachmentId) {
         if (!currentRequester)
             return;
@@ -105,6 +119,17 @@ export default function TicketDetail({ ticketId, onBack }) {
         }
         catch (error) {
             setActionError(error instanceof Error ? error.message : "Unable to record the resolution indication.");
+        }
+    }
+    async function handleDownload(attachmentId, fileName) {
+        if (!currentRequester)
+            return;
+        setActionError("");
+        try {
+            await downloadAttachment(attachmentId, currentRequester.id, fileName);
+        }
+        catch (error) {
+            setActionError(error instanceof Error ? error.message : "Unable to download attachment.");
         }
     }
     if (state === "loading")
