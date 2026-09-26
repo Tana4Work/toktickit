@@ -16,7 +16,7 @@ beforeAll(async () => {
   ownerId = requesters[0].id; otherId = requesters[1].id;
   const categoryId = (await prisma.category.findFirstOrThrow({ where: { active: true } })).id;
   const relatedSystemId = (await prisma.relatedSystem.findFirstOrThrow({ where: { active: true } })).id;
-  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-${runId}`, ticketDate: new Date(), summary: `Detail ticket ${runId}`, description: "Detailed ticket description for testing.", requestedPriority: "HIGH", currentStatus: "New", idempotencyKey: `detail-${runId}`, requestFingerprint: "test", requesterId: ownerId, categoryId, relatedSystemId } });
+  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-2026-${String(Date.now() % 1000000).padStart(6, "0")}`, ticketDate: new Date(), summary: "Email notifications are delayed", description: "Detailed ticket description for testing.", requestedPriority: "HIGH", currentStatus: "New", idempotencyKey: `detail-${runId}`, requestFingerprint: "test", requesterId: ownerId, categoryId, relatedSystemId } });
   ticketId = ticket.id;
   await prisma.attachment.createMany({ data: [
     { ticketId, originalName: "screen.png", storageKey: `safe/${runId}-screen`, mimeType: "image/png", sizeBytes: 1234 },
@@ -28,7 +28,7 @@ describe("GET /api/tickets/:ticketId", () => {
   it("returns read-only owned ticket fields and attachment metadata", async () => {
     const res = await request(app).get(`/api/tickets/${ticketId}?requesterId=${ownerId}`);
     expect(res.status).toBe(200);
-    expect(res.body.summary).toBe(`Detail ticket ${runId}`);
+    expect(res.body.summary).toBe("Email notifications are delayed");
     expect(res.body.requester).toHaveProperty("email");
     expect(res.body.attachments).toHaveLength(2);
     expect(res.body.attachments[1].removalReason).toBe("No longer needed");

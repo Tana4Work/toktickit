@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { DevelopmentRequester } from "./api.js";
+import type { AuthUser, DevelopmentRequester } from "./api.js";
 
 interface RequesterContextValue {
   currentRequester: DevelopmentRequester | null;

@@ -1,4 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const AUTH_TOKEN_KEY = "toktickit.auth.token";
+const AUTH_USER_KEY = "toktickit.auth.user";
 
 export interface Category {
   id: number;
@@ -11,12 +13,50 @@ export interface DevelopmentRequester {
   email: string;
 }
 
+export type UserRole = "Requester" | "ITStaff" | "Administrator";
+
+export interface AuthUser extends DevelopmentRequester {
+  role: UserRole;
+  active: boolean;
+  mustChangePassword: boolean;
+}
+
+export function getAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function getStoredUser(): AuthUser | null {
+  const value = window.localStorage.getItem(AUTH_USER_KEY);
+  if (!value) return null;
+  try { return JSON.parse(value) as AuthUser; } catch { return null; }
+}
+
+function saveAuth(token: string, user: AuthUser) {
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+}
+
+function clearAuth() {
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.localStorage.removeItem(AUTH_USER_KEY);
+}
+
+function errorMessage(payload: unknown, fallback: string) {
+  if (typeof payload === "object" && payload !== null && "error" in payload) {
+    const error = (payload as { error?: unknown }).error;
+    if (typeof error === "string") return error;
+    if (typeof error === "object" && error !== null && "message" in error && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
 export interface RelatedSystem {
   id: number;
   name: string;
 }
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type TicketStatus = "New" | "Open" | "InProgress" | "WaitingForRequester" | "Resolved" | "Closed" | "Reopened" | "Cancelled";
 
 export interface CreateTicketInput {
   requesterId: number;
@@ -42,8 +82,8 @@ export interface TicketListItem {
   summary: string;
   category: Category;
   relatedSystem: RelatedSystem;
-  requestedPriority: TicketPriority;
-  currentStatus: "New";
+  requestedPriority: string;
+  currentStatus: string;
   ticketDate: string;
   updatedAt: string;
 }
@@ -69,12 +109,84 @@ export interface TicketDetail extends TicketListItem {
   createdAt: string;
   requester: DevelopmentRequester;
   attachments: TicketAttachmentMetadata[];
+  problemAppearsResolvedAt?: string | null;
+  publicComments?: PublicComment[];
 }
 
+export interface PublicComment {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: Pick<AuthUser, "id" | "name" | "email" | "role">;
+}
+
+export interface InternalNote {
+  id: number;
+  content: string;
+  createdAt: string;
+  author: Pick<AuthUser, "id" | "name" | "email" | "role">;
+}
+
+export interface StaffTicketListItem extends TicketListItem {
+  itPriority: TicketPriority;
+  currentStatus: TicketStatus;
+  requester: DevelopmentRequester;
+  owner: Pick<AuthUser, "id" | "name" | "email" | "role"> | null;
+}
+
+export interface StaffTicketDetail extends StaffTicketListItem {
+  description: string;
+  createdAt: string;
+  problemAppearsResolvedAt?: string | null;
+  attachments: TicketAttachmentMetadata[];
+  publicComments: PublicComment[];
+  internalNotes: InternalNote[];
+}
+
+export interface StaffQueueResponse {
+  data: StaffTicketListItem[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+export type StaffOwner = Pick<AuthUser, "id" | "name" | "email" | "role">;
+
 async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`);
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  const token = getAuthToken();
+  const response = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+  if (!response.ok) {
+    let payload: unknown;
+    try { payload = await response.json(); } catch { payload = undefined; }
+    throw new Error(errorMessage(payload, `Request failed (${response.status})`));
+  }
   return (await response.json()) as T;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const response = await fetch(`${API_URL}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+  const payload = await response.json() as { token?: string; user?: AuthUser; error?: unknown };
+  if (!response.ok || !payload.token || !payload.user) throw new Error(errorMessage(payload, "Unable to sign in."));
+  saveAuth(payload.token, payload.user);
+  return payload.user;
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const user = await fetchJson<{ user: AuthUser }>("/api/auth/me");
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user.user));
+  return user.user;
+}
+
+export async function changePassword(newPassword: string, confirmPassword: string, currentPassword = ""): Promise<AuthUser> {
+  const response = await fetch(`${API_URL}/api/auth/change-password`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ currentPassword, newPassword, confirmPassword }) });
+  const payload = await response.json() as { user?: AuthUser; error?: unknown };
+  if (!response.ok || !payload.user) throw new Error(errorMessage(payload, "Unable to change password."));
+  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(payload.user));
+  return payload.user;
+}
+
+export async function logout() {
+  const token = getAuthToken();
+  if (token) await fetch(`${API_URL}/api/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+  clearAuth();
 }
 
 export async function fetchDevelopmentRequesters(): Promise<DevelopmentRequester[]> {
@@ -102,15 +214,15 @@ export async function fetchCategories(): Promise<Category[]> {
 }
 
 export async function createTicket(input: CreateTicketInput, idempotencyKey: string): Promise<CreatedTicket> {
+  const token = getAuthToken();
   const response = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(input),
   });
   const payload = await response.json() as unknown;
   if (!response.ok) {
-    const message = typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string"
-      ? payload.error : "Unable to create ticket.";
+    const message = errorMessage(payload, "Unable to create ticket.");
     throw new Error(message);
   }
   if (typeof payload !== "object" || payload === null || typeof (payload as CreatedTicket).ticketNumber !== "string") {
@@ -127,16 +239,100 @@ export async function fetchTicket(ticketId: number, requesterId: number): Promis
   return fetchJson<TicketDetail>(`/api/tickets/${ticketId}?requesterId=${requesterId}`);
 }
 
+export async function addPublicComment(ticketId: number, content: string): Promise<PublicComment> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Public Comment."));
+  return payload as PublicComment;
+}
+
+export async function indicateProblemResolved(ticketId: number): Promise<{ problemAppearsResolvedAt: string }> {
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/problem-resolved`, { method: "POST", headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to record the resolution indication."));
+  return payload as { problemAppearsResolvedAt: string };
+}
+
+export async function fetchStaffTickets(params = new URLSearchParams()): Promise<StaffQueueResponse> {
+  return fetchJson<StaffQueueResponse>(`/api/staff/tickets?${params.toString()}`);
+}
+
+export async function fetchStaffOwners(): Promise<StaffOwner[]> {
+  return fetchJson<StaffOwner[]>("/api/staff/owners");
+}
+
+export async function fetchStaffTicket(ticketId: number): Promise<StaffTicketDetail> {
+  return fetchJson<StaffTicketDetail>(`/api/staff/tickets/${ticketId}`);
+}
+
+async function patchStaff<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to update the Ticket."));
+  return payload as T;
+}
+
+export function updateStaffTicketOwner(ticketId: number, ownerId: number | null) { return patchStaff<{ id: number }>(`/api/staff/tickets/${ticketId}/owner`, { ownerId }); }
+export function updateStaffTicketPriority(ticketId: number, itPriority: TicketPriority) { return patchStaff<{ id: number; itPriority: TicketPriority }>(`/api/staff/tickets/${ticketId}/priority`, { itPriority }); }
+export function updateStaffTicketStatus(ticketId: number, status: TicketStatus) { return patchStaff<{ id: number; currentStatus: TicketStatus }>(`/api/staff/tickets/${ticketId}/status`, { status }); }
+
+export async function addStaffPublicComment(ticketId: number, content: string): Promise<PublicComment> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Public Comment."));
+  return payload as PublicComment;
+}
+
+export async function addInternalNote(ticketId: number, content: string): Promise<InternalNote> {
+  const response = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/notes`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ content }) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to add Internal Note."));
+  return payload as InternalNote;
+}
+
+export interface ManagedUser extends AuthUser {
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminUserListResponse {
+  data: ManagedUser[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+export interface AdminUserInput {
+  name: string;
+  email: string;
+  role: UserRole;
+  active: boolean;
+  initialPassword?: string;
+}
+
+export async function fetchAdminUsers(params = new URLSearchParams()): Promise<AdminUserListResponse> {
+  return fetchJson<AdminUserListResponse>(`/api/admin/users?${params.toString()}`);
+}
+
+async function adminMutation<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
+  const payload = await response.json() as unknown;
+  if (!response.ok) throw new Error(errorMessage(payload, "Unable to update user."));
+  return payload as T;
+}
+
+export function createAdminUser(input: AdminUserInput) { return adminMutation<ManagedUser>("/api/admin/users", "POST", input); }
+export function updateAdminUser(userId: number, input: Partial<AdminUserInput>) { return adminMutation<ManagedUser>(`/api/admin/users/${userId}`, "PATCH", input); }
+export function resetAdminInitialPassword(userId: number, initialPassword: string) { return adminMutation<ManagedUser>(`/api/admin/users/${userId}/initial-password`, "POST", { initialPassword }); }
+
 export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<TicketAttachmentMetadata> {
   const form = new FormData(); form.append("file", file);
-  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", body: form });
+  const response = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments?requesterId=${requesterId}`, { method: "POST", headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: form });
   const payload = await response.json() as unknown;
   if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to upload attachment.");
   return payload as TicketAttachmentMetadata;
 }
 
 export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<TicketAttachmentMetadata> {
-  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}?requesterId=${requesterId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+  const response = await fetch(`${API_URL}/api/attachments/${attachmentId}?requesterId=${requesterId}`, { method: "DELETE", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify({ reason }) });
   const payload = await response.json() as unknown;
   if (!response.ok) throw new Error(typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : "Unable to remove attachment.");
   return payload as TicketAttachmentMetadata;
@@ -144,6 +340,26 @@ export async function removeAttachment(attachmentId: number, requesterId: number
 
 export function attachmentDownloadUrl(attachmentId: number, requesterId: number) {
   return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}
+
+export async function downloadAttachment(attachmentId: number, requesterId: number, fileName: string) {
+  const response = await fetch(attachmentDownloadUrl(attachmentId, requesterId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  if (!response.ok) throw new Error("Unable to download attachment.");
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a"); link.href = objectUrl; link.download = fileName; link.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export function staffAttachmentDownloadUrl(attachmentId: number) {
+  return `${API_URL}/api/staff/attachments/${attachmentId}/download`;
+}
+
+export async function downloadStaffAttachment(attachmentId: number, fileName: string) {
+  const response = await fetch(staffAttachmentDownloadUrl(attachmentId), { headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` } });
+  if (!response.ok) throw new Error("Unable to download attachment.");
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a"); link.href = objectUrl; link.download = fileName; link.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export interface SystemStatus {
@@ -159,7 +375,9 @@ export interface SystemStatus {
 //        return { online: true, categories }.
 // Throwing on failure lets the UI show a single Offline/error state.
 export async function checkSystem(): Promise<SystemStatus> {
-  const healthResponse = await fetch(`${API_URL}/api/health`);
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const healthResponse = await fetch(`${API_URL}/api/health`, { headers });
   if (!healthResponse.ok) {
     throw new Error(`Health check failed (${healthResponse.status})`);
   }
@@ -169,7 +387,7 @@ export async function checkSystem(): Promise<SystemStatus> {
     throw new Error("Invalid health response");
   }
 
-  const categoriesResponse = await fetch(`${API_URL}/api/categories`);
+  const categoriesResponse = await fetch(`${API_URL}/api/categories`, { headers });
   if (!categoriesResponse.ok) {
     throw new Error(`Category request failed (${categoriesResponse.status})`);
   }

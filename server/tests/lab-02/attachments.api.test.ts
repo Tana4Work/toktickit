@@ -19,7 +19,7 @@ beforeAll(async () => {
   ownerId = requesters[0].id; otherId = requesters[1].id;
   const categoryId = (await prisma.category.findFirstOrThrow({ where: { active: true } })).id;
   const relatedSystemId = (await prisma.relatedSystem.findFirstOrThrow({ where: { active: true } })).id;
-  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-2099-${String(Date.now() % 1000000).padStart(6, "0")}`, ticketDate: new Date(), summary: `Attachment ticket ${runId}`, description: "Attachment lifecycle test ticket.", requestedPriority: "MEDIUM", currentStatus: "New", idempotencyKey: `attachment-${runId}`, requestFingerprint: "test", requesterId: ownerId, categoryId, relatedSystemId } });
+  const ticket = await prisma.ticket.create({ data: { ticketNumber: `TK-2026-${String(Date.now() % 1000000).padStart(6, "0")}`, ticketDate: new Date(), summary: "Shared drive access is denied", description: "Attachment lifecycle test ticket.", requestedPriority: "MEDIUM", currentStatus: "New", idempotencyKey: `attachment-${runId}`, requestFingerprint: "test", requesterId: ownerId, categoryId, relatedSystemId } });
   ticketId = ticket.id;
 });
 
