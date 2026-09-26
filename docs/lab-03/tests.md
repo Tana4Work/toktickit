@@ -2,6 +2,8 @@
 
 Tests are planned before implementation is considered complete. Each test follows TDD where practical: write a failing test for the agreed behavior, implement the smallest correct change, then refactor while keeping the test green.
 
+The plan is the Test DD deliverable and is maintained alongside the specification before implementation. Final results must be recorded from the final integrated branch, not inferred only from generated tests.
+
 ## Required Coverage
 
 - Unit and model/business-rule tests
@@ -34,6 +36,18 @@ Tests are planned before implementation is considered complete. Each test follow
 | E2E-02 | E2E | AC-05/06 | IT Staff queue, detail, ownership, comments, notes | `e2e/lab-03/staff-ticket-flow.spec.ts` |
 | E2E-03 | E2E | AC-07 | Administrator user-management flow | `e2e/lab-03/user-administration.spec.ts` |
 
+## Issue 6 QA Evidence
+
+| Evidence ID | Coverage | Actual file or artifact | Current result |
+|---|---|---|---|
+| QA-01 | Authentication safe failure and first-login continuation | `e2e/lab-03/authentication.spec.ts`, `artifacts/lab-03/screenshots/authentication/` | Pass: local Playwright run; desktop/tablet/mobile login captures present |
+| QA-02 | Desktop/tablet/mobile login layout and horizontal overflow | `e2e/lab-03/responsive.spec.ts` | Pass: 3 viewport checks |
+| QA-03 | Zen Green brand/status/focus UI hooks | `client/tests/lab-03/ZenGreen.visual.test.tsx` | Pass: local Vitest run |
+| QA-04 | IT Staff authenticated queue entry | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pass: local Playwright run |
+| QA-05 | Administrator authenticated User Management entry | `e2e/lab-03/user-administration.spec.ts` | Pass: local Playwright run |
+
+The Lab 3 Playwright run currently reports 7 passing tests. Screenshot evidence paths are documented in `ui-spec.md` and must be included in the final PDF under Answer Part 9.
+
 ## Acceptance-Criteria Traceability
 
 | Criterion | Planned tests |
@@ -58,3 +72,19 @@ Tests are planned before implementation is considered complete. Each test follow
 - [ ] Migration/regression tests pass against preserved Lab 2 data.
 - [ ] E2E authentication, staff workflow, and administration tests pass.
 - [ ] Test output and file paths are recorded in the final submission.
+
+## Final Submission Mapping
+
+The single final PDF must use the exact headings `Answer Part 1` through `Answer Part 9`. This repository supports the evidence as follows:
+
+| Answer Part | Primary repository evidence |
+|---|---|
+| 1 | Git history, branches, PRs, `reviewer.md`, README, and repository structure |
+| 2 | `specification.md` |
+| 3 | This file, test output, traceability table, and actual test paths |
+| 4 | `ai-use.md` |
+| 5 | Authentication implementation, tests, and authentication screenshots |
+| 6 | Staff Queue implementation, tests, and staff queue screenshots |
+| 7 | Staff Ticket Detail implementation, authorization tests, and detail screenshots |
+| 8 | Administrator User Management implementation, tests, and user-management screenshots |
+| 9 | `ui-spec.md` plus desktop/tablet/mobile screenshots and completed visual checklist |
