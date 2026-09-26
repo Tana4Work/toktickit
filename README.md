@@ -1,4 +1,4 @@
-# TokTickIT Lab 2
+# TokTickIT Lab 3
 
 TokTickIT is a small React and Express service-desk application backed by PostgreSQL and Prisma.
 
