@@ -66,6 +66,11 @@ The backend is authoritative. Hidden or disabled UI controls do not replace API 
 - **BR-11:** An Administrator cannot deactivate their own account or leave the system without an active Administrator.
 - **BR-12:** Deactivation is used instead of user deletion.
 - **BR-13:** Passwords are never stored in plaintext or exposed to client code.
+- **BR-14:** Logout invalidates the current session; expired, invalidated, or inactive sessions cannot continue into protected screens or APIs.
+- **BR-15:** Passwords must be 8-128 characters; the first-login change requires confirmation and the configured complexity rules.
+- **BR-16:** Invalid credentials and inactive accounts use the same safe authentication response and do not reveal account state.
+- **BR-17:** Protected operations distinguish unauthenticated, forbidden, invalid-input, missing-resource, conflict, and unexpected-failure outcomes without leaking protected data.
+- **BR-18:** Seed credentials are local-development-only values; no real personal passwords or secrets are committed.
 
 ## 7. Data Changes and Migration Decisions
 
@@ -80,6 +85,12 @@ The API specification must define exact paths, methods, request/response shapes,
 - IT Staff Queue and Ticket Detail;
 - claim/assign/reassign, IT Priority, status, Public Comments, and Internal Notes;
 - Administrator user list/search/filter, create, edit, activation, and initial-password reset.
+
+Authentication uses an opaque bearer token in the `Authorization` header. Tokens expire after eight hours, logout invalidates the session, and passwords are stored as salted `scrypt` hashes. The exact `/api` paths, payloads, status codes, validation limits, safe errors, queue query behavior, and status-transition matrix are maintained in `api-spec.md`.
+
+## 8.1 UI and Feedback Summary
+
+The application uses one Zen Green shell with role-specific navigation. Login, mandatory password change, Requester, IT Staff Queue, IT Staff Ticket Detail, and Administrator User Management screens provide accessible labels, visible loading/saving/success/validation/empty/no-results/forbidden/not-found/conflict/failure feedback, and responsive desktop, tablet, and mobile layouts. Detailed screen structure and visual checks are maintained in `ui-spec.md`.
 
 ## 9. Acceptance Criteria
 
@@ -107,4 +118,4 @@ The API specification must define exact paths, methods, request/response shapes,
 
 - A user has one role in Lab 3; multi-role authorization is excluded.
 - Local development seed credentials are documented but never real personal secrets.
-- The session/token mechanism, password hashing library, status-transition matrix, field length limits, and exact endpoint paths must be finalized in `api-spec.md` before implementation.
+- The approved decisions are opaque bearer sessions, salted `scrypt` password hashes, an eight-hour session lifetime, logout invalidation, the documented status-transition matrix, and the exact `/api` endpoint paths in `api-spec.md`.

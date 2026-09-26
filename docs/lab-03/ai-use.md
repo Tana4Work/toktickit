@@ -1,6 +1,6 @@
 # Lab 3 AI Use and Reflection
 
-**LLM/agent used:** OpenAI Codex
+**LLM/agent used:** OpenAI Codex Luna 5.6
 
 ## Selected Key Prompts
 

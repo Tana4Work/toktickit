@@ -43,3 +43,36 @@
 - Focus indicators remain visible and status is not conveyed by color alone.
 - Validate desktop, tablet, and mobile layouts for clipping, overlap, unreadable text, and horizontal overflow.
 - Capture screenshots for authentication, staff queue, staff detail, and user management.
+
+## Required Screen Modes and Feedback
+
+| Screen | Create/view/edit modes | Required feedback |
+|---|---|---|
+| Login | Empty, submitting, invalid/inactive, authenticated | Required-field validation, busy state, safe failure, password visibility control |
+| Change Password | Initial form, validation, saving, success | Rule-by-rule password guidance, confirmation mismatch, safe API failure |
+| Requester tickets/detail | Loading, list, empty/no-results, detail, attachment upload | Ownership-safe failure, upload validation, upload success, download/remove failure, comment success/failure |
+| IT Staff Queue | Loading, populated, empty/no-results, forbidden, failure | Search/filter/pagination state, readable badges, open-detail action |
+| IT Staff Detail | Loading, view, editable workflow, forbidden/not-found, failure | Owner/priority/status saving, public/internal separation, attachment continuity |
+| Administrator users | Loading, list, create, edit, conflict/forbidden/failure | Validation, success, duplicate-email conflict, activation and initial-password feedback |
+
+## Evidence Capture Plan
+
+The final submission must include readable desktop, tablet, and mobile screenshots for all major Lab 3 screens. Store repository evidence under:
+
+```text
+artifacts/lab-03/screenshots/
+├── authentication/
+├── staff-queue/
+├── staff-ticket-detail/
+└── user-management/
+```
+
+Each capture review checks Zen Green consistency, role navigation, status and priority badges, editable versus read-only fields, validation placement, visible focus, clipping, overlap, text legibility, and horizontal overflow.
+
+Captured authentication evidence is available at:
+
+- `artifacts/lab-03/screenshots/authentication/login-desktop.png`
+- `artifacts/lab-03/screenshots/authentication/login-tablet.png`
+- `artifacts/lab-03/screenshots/authentication/login-mobile.png`
+
+Staff Queue, Staff Ticket Detail, and User Management captures require the local PostgreSQL service to be reachable from the backend and should be added to their corresponding folders after that environment is restored.
