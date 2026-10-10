@@ -21,6 +21,7 @@ function DetailHarness() {
     return _jsx(TicketDetail, { ticketId: 10, onBack: vi.fn() });
 }
 function renderDetail() {
+    vi.spyOn(api, "fetchActionsTaken").mockResolvedValue([]);
     return render(_jsx(RequesterProvider, { children: _jsx(DetailHarness, {}) }));
 }
 describe("Lab 3 requester regression and Public Comments", () => {

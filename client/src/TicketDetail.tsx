@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { addPublicComment, attachmentDownloadUrl, downloadAttachment, fetchTicket, indicateProblemResolved, removeAttachment, TicketDetail as TicketDetailData, uploadAttachment } from "./api.js";
 import { useRequester } from "./requesterContext.js";
+import ActionsTakenPanel from "./ActionsTakenPanel.js";
 
 type TicketDetailProps = { ticketId: number; onBack: () => void };
 
@@ -124,6 +125,6 @@ export default function TicketDetail({ ticketId, onBack }: TicketDetailProps) {
     {uploadError && <p role="alert" className="text-danger">{uploadError}</p>}
     {uploadSuccess && <p role="status" className="text-success">{uploadSuccess}</p>}
     {ticket.attachments.length === 0 ? <p role="status">No attachments.</p> : <ul>{ticket.attachments.map((attachment) => <li key={attachment.id}>{attachment.removedAt ? <span>{attachment.originalName} <small>({attachment.mimeType}, {attachment.sizeBytes} bytes)</small> <span className="removed-label">— Removed: {attachment.removalReason ?? "No reason provided"}</span></span> : <><span>{attachment.originalName} <small>({attachment.mimeType}, {attachment.sizeBytes} bytes)</small></span><span><a className="attachment-action" href={attachmentDownloadUrl(attachment.id, currentRequester!.id)}>Download</a><button className="attachment-action danger" onClick={() => void handleRemove(attachment.id)}>Remove</button></span></>}</li>)}</ul>}
-    </div></div>
+    </div><ActionsTakenPanel ticketId={ticketId} staffMode={false} /></div>
   </section>;
 }

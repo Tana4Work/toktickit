@@ -24,6 +24,7 @@ function DetailHarness() {
 }
 
 function renderDetail() {
+  vi.spyOn(api, "fetchActionsTaken").mockResolvedValue([]);
   return render(<RequesterProvider><DetailHarness /></RequesterProvider>);
 }
 
