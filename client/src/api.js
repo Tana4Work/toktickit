@@ -140,6 +140,8 @@ export async function indicateProblemResolved(ticketId) {
 export async function fetchStaffTickets(params = new URLSearchParams()) {
     return fetchJson(`/api/staff/tickets?${params.toString()}`);
 }
+export function fetchRequesterDashboard() { return fetchJson("/api/requester/dashboard"); }
+export function fetchStaffDashboard() { return fetchJson("/api/staff/dashboard"); }
 export async function fetchStaffOwners() {
     return fetchJson("/api/staff/owners");
 }

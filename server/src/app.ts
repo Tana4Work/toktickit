@@ -542,6 +542,33 @@ app.get("/api/tickets/:ticketId/actions-taken", ...requireApplicationUser, async
   } catch { actionError(res, "ACTION_LIST_ERROR", "Unable to load Actions Taken.", 500); }
 });
 
+function dashboardTicketResponse(ticket: { id: number; ticketNumber: string; summary: string; currentStatus: string; requestedPriority: string; itPriority: string; updatedAt: Date; ticketDate: Date }) { return { id: ticket.id, ticketNumber: ticket.ticketNumber, summary: ticket.summary, currentStatus: ticket.currentStatus, requestedPriority: ticket.requestedPriority, itPriority: ticket.itPriority, updatedAt: ticket.updatedAt, ticketDate: ticket.ticketDate }; }
+function metric(key: string, label: string, value: number, path: string, query: Record<string, string> = {}) { return { key, label, value, drillDown: { path, query } }; }
+
+app.get("/api/requester/dashboard", ...requireRequester, async (req: AuthenticatedRequest, res: Response) => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  try {
+    const prisma = getPrisma(); const legacyId = await legacyRequesterIdForUser(req.user!.id); const ownership = { OR: [{ requesterUserId: req.user!.id }, ...(legacyId ? [{ requesterId: legacyId }] : [])] };
+    const [openTickets, waitingTickets, recentlyUpdated, recentlyResolved, recentTickets] = await prisma.$transaction([
+      prisma.ticket.count({ where: { ...ownership, currentStatus: { in: ["New", "Open", "InProgress", "Reopened"] } } }), prisma.ticket.count({ where: { ...ownership, currentStatus: "WaitingForRequester" } }), prisma.ticket.count({ where: { ...ownership, updatedAt: { gte: since } } }), prisma.ticket.count({ where: { ...ownership, currentStatus: "Resolved", updatedAt: { gte: since } } }), prisma.ticket.findMany({ where: ownership, orderBy: { updatedAt: "desc" }, take: 5, select: { id: true, ticketNumber: true, summary: true, currentStatus: true, requestedPriority: true, itPriority: true, updatedAt: true, ticketDate: true } }),
+    ]);
+    res.status(200).json({ metrics: [metric("openTickets", "Open Tickets", openTickets, "/my-tickets", { status: "open" }), metric("waitingForRequester", "Waiting for Requester", waitingTickets, "/my-tickets", { status: "WaitingForRequester" }), metric("recentlyUpdated", "Updated in the Last 7 Days", recentlyUpdated, "/my-tickets", { sortBy: "updatedAt" }), metric("recentlyResolved", "Resolved in the Last 7 Days", recentlyResolved, "/my-tickets", { status: "Resolved" })], recentTickets: recentTickets.map(dashboardTicketResponse), dateBoundary: since.toISOString() });
+  } catch { res.status(500).json({ error: { code: "REQUESTER_DASHBOARD_ERROR", message: "Unable to load the Requester dashboard." } }); }
+});
+
+app.get("/api/staff/dashboard", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  try {
+    const prisma = getPrisma();
+    const [unassigned, owned, recentTickets, urgentTickets, currentUserActions, statusGroups, priorityGroups] = await prisma.$transaction([
+      prisma.ticket.count({ where: { ownerId: null, currentStatus: { notIn: ["Closed", "Cancelled"] } } }), prisma.ticket.count({ where: { ownerId: req.user!.id, currentStatus: { notIn: ["Closed", "Cancelled"] } } }), prisma.ticket.findMany({ where: { updatedAt: { gte: since } }, orderBy: { updatedAt: "desc" }, take: 5, select: { id: true, ticketNumber: true, summary: true, currentStatus: true, requestedPriority: true, itPriority: true, updatedAt: true, ticketDate: true } }), prisma.ticket.findMany({ where: { requestedPriority: "URGENT", currentStatus: { notIn: ["Closed", "Cancelled"] } }, orderBy: { updatedAt: "desc" }, take: 5, select: { id: true, ticketNumber: true, summary: true, currentStatus: true, requestedPriority: true, itPriority: true, updatedAt: true, ticketDate: true } }), prisma.actionTaken.count({ where: { performedById: req.user!.id, createdAt: { gte: since } } }), prisma.ticket.groupBy({ by: ["currentStatus"], orderBy: { currentStatus: "asc" }, _count: { id: true } }), prisma.ticket.groupBy({ by: ["itPriority"], orderBy: { itPriority: "asc" }, _count: { id: true } }),
+    ]);
+    const statusCounts = Object.fromEntries((statusGroups as Array<{ currentStatus: string; _count: { id: number } }>).map((group) => [group.currentStatus, group._count.id]));
+    const priorityCounts = Object.fromEntries((priorityGroups as Array<{ itPriority: string; _count: { id: number } }>).map((group) => [group.itPriority, group._count.id]));
+    res.status(200).json({ metrics: [metric("unassignedTickets", "Unassigned Tickets", unassigned, "/queue", { owner: "unassigned" }), metric("myOwnedTickets", "My Owned Tickets", owned, "/queue", { owner: String(req.user!.id) }), metric("recentlyUpdated", "Updated in the Last 7 Days", recentTickets.length, "/queue", { sortBy: "updatedAt" }), metric("myActionsTaken", "My Actions Taken (7 Days)", currentUserActions, "/queue")], statusCounts, priorityCounts, recentTickets: recentTickets.map(dashboardTicketResponse), urgentTickets: urgentTickets.map(dashboardTicketResponse), dateBoundary: since.toISOString() });
+  } catch { res.status(500).json({ error: { code: "STAFF_DASHBOARD_ERROR", message: "Unable to load the Staff dashboard." } }); }
+});
+
 app.post("/api/tickets/:ticketId/actions-taken", ...requireApplicationUser, async (req: AuthenticatedRequest, res: Response) => {
   if (req.user!.role === "Requester") { actionError(res, "FORBIDDEN", "Requesters cannot create Actions Taken.", 403); return; }
   const ticketId = Number(req.params.ticketId);
@@ -692,7 +719,7 @@ app.patch("/api/staff/tickets/:ticketId/priority", ...requireStaff, async (req: 
 app.patch("/api/staff/tickets/:ticketId/status", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {
   const ticketId = Number(req.params.ticketId); const nextStatus = authBody(req).status as StaffStatus;
   if (!Number.isInteger(ticketId) || !STAFF_STATUSES.includes(nextStatus)) { res.status(400).json({ error: { code: "INVALID_STATUS", message: "Invalid Ticket status." } }); return; }
-  try { const existing = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { currentStatus: true } }); if (!existing) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; } if (!STATUS_TRANSITIONS[existing.currentStatus as StaffStatus].includes(nextStatus)) { res.status(422).json({ error: { code: "INVALID_STATUS_TRANSITION", message: `Cannot change status from ${existing.currentStatus} to ${nextStatus}.` } }); return; } const ticket = await getPrisma().ticket.update({ where: { id: ticketId }, data: { currentStatus: nextStatus }, select: { id: true, currentStatus: true, updatedAt: true } }); res.status(200).json(ticket); } catch { res.status(500).json({ error: { code: "STATUS_UPDATE_ERROR", message: "Unable to update Ticket status." } }); }
+  try { const existing = await getPrisma().ticket.findUnique({ where: { id: ticketId }, select: { currentStatus: true, actionsTaken: { where: { status: "Completed" }, select: { id: true }, take: 1 } } }); if (!existing) { res.status(404).json({ error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." } }); return; } if (!STATUS_TRANSITIONS[existing.currentStatus as StaffStatus].includes(nextStatus)) { res.status(422).json({ error: { code: "INVALID_STATUS_TRANSITION", message: `Cannot change status from ${existing.currentStatus} to ${nextStatus}.` } }); return; } if (nextStatus === "Resolved" && existing.actionsTaken.length === 0) { res.status(422).json({ error: { code: "RESOLUTION_GATE", message: "A completed Action Taken is required before resolving this Ticket." } }); return; } const ticket = await getPrisma().ticket.update({ where: { id: ticketId }, data: { currentStatus: nextStatus }, select: { id: true, currentStatus: true, updatedAt: true } }); res.status(200).json(ticket); } catch { res.status(500).json({ error: { code: "STATUS_UPDATE_ERROR", message: "Unable to update Ticket status." } }); }
 });
 
 app.post("/api/staff/tickets/:ticketId/comments", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {

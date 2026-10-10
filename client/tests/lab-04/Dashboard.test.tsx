@@ -1,0 +1,14 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import Dashboard from "../../src/Dashboard.js";
+import * as api from "../../src/api.js";
+
+vi.mock("../../src/api.js", async () => { const actual = await vi.importActual<typeof import("../../src/api.js")>("../../src/api.js"); return { ...actual, fetchRequesterDashboard: vi.fn(), fetchStaffDashboard: vi.fn() }; });
+
+const metrics = [{ key: "openTickets", label: "Open Tickets", value: 2, drillDown: { path: "/my-tickets", query: {} } }, { key: "waitingForRequester", label: "Waiting for Requester", value: 1, drillDown: { path: "/my-tickets", query: {} } }, { key: "recentlyUpdated", label: "Updated in the Last 7 Days", value: 3, drillDown: { path: "/my-tickets", query: {} } }, { key: "recentlyResolved", label: "Resolved in the Last 7 Days", value: 1, drillDown: { path: "/my-tickets", query: {} } }];
+
+describe("Lab 4 dashboards", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it("shows Requester-owned metrics and recent tickets", async () => { vi.mocked(api.fetchRequesterDashboard).mockResolvedValue({ metrics, recentTickets: [], dateBoundary: "2026-10-10T00:00:00.000Z" }); render(<Dashboard staffMode={false} onTickets={vi.fn()} />); expect(await screen.findByRole("heading", { name: "Requester Dashboard" })).toBeInTheDocument(); expect(screen.getByText("Open Tickets")).toBeInTheDocument(); expect(screen.getAllByText("No Tickets in this section.")).toHaveLength(2); });
+  it("shows Staff metrics and operational counts", async () => { vi.mocked(api.fetchStaffDashboard).mockResolvedValue({ metrics: metrics.slice(0, 0).concat([{ key: "unassignedTickets", label: "Unassigned Tickets", value: 2, drillDown: { path: "/queue", query: {} } }, { key: "myOwnedTickets", label: "My Owned Tickets", value: 1, drillDown: { path: "/queue", query: {} } }, { key: "recentlyUpdated", label: "Updated in the Last 7 Days", value: 3, drillDown: { path: "/queue", query: {} } }, { key: "myActionsTaken", label: "My Actions Taken (7 Days)", value: 4, drillDown: { path: "/queue", query: {} } }]), statusCounts: { Open: 2 }, priorityCounts: { HIGH: 1 }, recentTickets: [], urgentTickets: [], dateBoundary: "2026-10-10T00:00:00.000Z" }); render(<Dashboard staffMode onTickets={vi.fn()} />); expect(await screen.findByRole("heading", { name: "Staff Dashboard" })).toBeInTheDocument(); expect(screen.getByText("Ticket Status Counts")).toBeInTheDocument(); expect(screen.getByText("IT Priority Counts")).toBeInTheDocument(); });
+});

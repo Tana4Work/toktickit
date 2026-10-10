@@ -33,6 +33,8 @@ Requesters may use the GET operation only when the Ticket is theirs. IT Staff an
 
 The backend enforces the transition matrix and resolution gate. The advisory Requester indication never directly sets `Resolved`.
 
+The transition matrix is `New -> Open/Cancelled`, `Open -> InProgress/WaitingForRequester/Cancelled`, `InProgress -> WaitingForRequester/Resolved/Cancelled`, `WaitingForRequester -> InProgress/Resolved/Cancelled`, `Resolved -> Closed/Reopened`, `Closed -> Reopened`, `Reopened -> InProgress/Resolved/Cancelled`, and `Cancelled -> Reopened`. A Ticket may enter `Resolved` only when it has at least one `Completed` Action Taken.
+
 ## Dashboards
 
 | Method | Path | Purpose |
@@ -41,6 +43,8 @@ The backend enforces the transition matrix and resolution gate. The advisory Req
 | GET | `/staff/dashboard` | Return concise operational metrics and recent/urgent Ticket summaries for permitted Staff/Admin users. |
 
 Dashboard responses must define the calculation, zero/empty behavior, UTC date boundaries, and drill-down filter or destination for each metric. They must not return an unbounded replacement for the detailed Ticket Queue or My Tickets collection.
+
+`/requester/dashboard` is scoped to the authenticated Requester’s owned Tickets. It returns Open (New/Open/InProgress/Reopened), Waiting for Requester, updated-in-last-7-days, resolved-in-last-7-days metrics, and at most five recently updated owned Tickets. `/staff/dashboard` is restricted to IT Staff/Administrators and returns active unassigned and current-user-owned counts, current-user Actions Taken from the last 7 days, status/IT Priority counts, and at most five recently updated and urgent active Tickets. Empty results return zero metrics and empty arrays; the date boundary is an ISO UTC timestamp.
 
 ## Dashboard Response Shape
 
@@ -68,8 +72,8 @@ The exact keys and labels must be kept consistent with `specification.md`, `ui-s
 
 ## Contract Completion Checklist
 
-- [ ] Exact request and response fields are finalized before implementation.
-- [ ] Authorization matrix is tested for Requester, IT Staff, and Administrator.
-- [ ] Status-transition matrix and resolution gate are documented.
-- [ ] Dashboard calculations, dates, empty states, and drill-downs are documented.
+- [x] Exact request and response fields are finalized before implementation.
+- [x] Authorization matrix is tested for Requester, IT Staff, and Administrator.
+- [x] Status-transition matrix and resolution gate are documented.
+- [x] Dashboard calculations, dates, empty states, and drill-downs are documented.
 - [ ] Conflict, retry, and safe-error behavior is documented.
