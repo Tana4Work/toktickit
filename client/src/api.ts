@@ -151,6 +151,11 @@ export interface StaffQueueResponse {
   pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }
 
+export interface DashboardTicket { id: number; ticketNumber: string; summary: string; currentStatus: TicketStatus; requestedPriority: TicketPriority; itPriority: TicketPriority; updatedAt: string; ticketDate: string; }
+export interface DashboardMetric { key: string; label: string; value: number; drillDown: { path: string; query: Record<string, string> }; }
+export interface RequesterDashboardData { metrics: DashboardMetric[]; recentTickets: DashboardTicket[]; dateBoundary: string; }
+export interface StaffDashboardData { metrics: DashboardMetric[]; statusCounts: Record<string, number>; priorityCounts: Record<string, number>; recentTickets: DashboardTicket[]; urgentTickets: DashboardTicket[]; dateBoundary: string; }
+
 export type StaffOwner = Pick<AuthUser, "id" | "name" | "email" | "role">;
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -259,6 +264,9 @@ export async function indicateProblemResolved(ticketId: number): Promise<{ probl
 export async function fetchStaffTickets(params = new URLSearchParams()): Promise<StaffQueueResponse> {
   return fetchJson<StaffQueueResponse>(`/api/staff/tickets?${params.toString()}`);
 }
+
+export function fetchRequesterDashboard() { return fetchJson<RequesterDashboardData>("/api/requester/dashboard"); }
+export function fetchStaffDashboard() { return fetchJson<StaffDashboardData>("/api/staff/dashboard"); }
 
 export async function fetchStaffOwners(): Promise<StaffOwner[]> {
   return fetchJson<StaffOwner[]>("/api/staff/owners");
