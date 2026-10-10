@@ -1,4 +1,4 @@
-# TokTickIT Lab 2
+# TokTickIT Lab 4
 
 TokTickIT is a small React and Express service-desk application backed by PostgreSQL and Prisma.
 
@@ -114,7 +114,63 @@ The E2E flow covers requester selection, ticket creation, creation-time attachme
 
 For final delivery evidence, see `docs/lab-02/tests.md` and `docs/lab-02/reviewer.md`.
 
-## Branch workflow
+## Lab 4 engineering contract
+
+Lab 4 completes the service-desk workflow with Actions Taken, final Ticket status enforcement, role-appropriate dashboards, and final regression hardening. The approved contract and traceability documents are in `docs/lab-04/`:
+
+- `specification.md` - requirements, business rules, data decisions, acceptance criteria, and Definition of Done.
+- `tests.md` - planned tests and acceptance-criterion traceability.
+- `ui-spec.md` - screen behavior, feedback, responsive rules, and accessibility.
+- `api-spec.md` - endpoint, authorization, validation, dashboard, and conflict contracts.
+- `reviewer.md` - peer-review and PR evidence record.
+- `ai-use.md` - selected AI prompts and reflection.
+
+The Lab 4 scope includes multiple Actions Taken per Ticket, backend-authoritative authorization, Ticket workflow and resolution rules, Requester and Staff dashboards, migration-safe seed data, responsive/accessibility behavior, and Lab 1-3 regression. SLA clocks, external notifications, inventory, billing, advanced BI, multi-tenant operations, and other unapproved features are excluded.
+
+## Lab 4 branch workflow
+
+`main` remains unchanged while Lab 4 is developed. The integration baseline is `lab4-staging`, created from `main`. Create each issue branch from the latest `lab4-staging`, push the completed issue branch, and open a PR targeting `lab4-staging`. A peer reviews and merges the PR. Only after all Lab 4 issues pass final verification should `lab4-staging` be integrated into `main`.
+
+~~~text
+main
+`-- lab4-staging
+    |-- feature/lab4-01-docs-test-planning
+    |-- feature/lab4-02-actions-taken-backend
+    |-- feature/lab4-03-actions-taken-ui
+    |-- feature/lab4-04-workflow-dashboards
+    |-- feature/lab4-05-regression-responsive-visual-qa
+    `-- feature/lab4-06-integration-submission-release
+~~~
+
+Issue 1 is the current planning increment. Its branch is `feature/lab4-01-docs-test-planning`. Later issue branches should be created from the updated `lab4-staging` after the preceding issue has been merged.
+
+## Lab 4 test and migration commands
+
+From `server/`, apply migrations and seed the database:
+
+~~~powershell
+npx prisma migrate deploy
+npm run prisma:seed
+npm test
+npm run build
+~~~
+
+From `client/`, run the client checks:
+
+~~~powershell
+npm test -- --run
+npm run build
+~~~
+
+From the repository root, run E2E tests with PostgreSQL available:
+
+~~~powershell
+npm run test:e2e
+~~~
+
+The final Lab 4 evidence must show migration/seed behavior, API and UI tests, dashboard calculations and drill-downs, Actions Taken, Ticket workflow, regression behavior, responsive/accessibility checks, peer review, and final branch integration.
+
+## Historical Lab 2 branch workflow
 
 ~~~text
 feature/lab2-01-specification-test-plan
