@@ -57,6 +57,9 @@ export interface RelatedSystem {
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TicketStatus = "New" | "Open" | "InProgress" | "WaitingForRequester" | "Resolved" | "Closed" | "Reopened" | "Cancelled";
+export type ActionStatus = "Planned" | "InProgress" | "Completed" | "Cancelled";
+export interface ActionActor { id: number; name: string; email: string; role: UserRole; }
+export interface ActionTaken { id: number; ticketId: number; actionDateTime: string; description: string; result: string; performedBy: ActionActor; assignedTo: ActionActor | null; followUpRequired: boolean; followUpNote: string | null; attachmentNotes: string | null; status: ActionStatus; version: number; createdAt: string; updatedAt: string; }
 
 export interface CreateTicketInput {
   requesterId: number;
@@ -264,6 +267,13 @@ export async function fetchStaffOwners(): Promise<StaffOwner[]> {
 export async function fetchStaffTicket(ticketId: number): Promise<StaffTicketDetail> {
   return fetchJson<StaffTicketDetail>(`/api/staff/tickets/${ticketId}`);
 }
+
+export async function fetchActionsTaken(ticketId: number): Promise<ActionTaken[]> { return fetchJson<ActionTaken[]>(`/api/tickets/${ticketId}/actions-taken`); }
+export interface ActionTakenInput { actionDateTime: string; description: string; result: string; followUpRequired: boolean; followUpNote: string | null; attachmentNotes: string | null; assignedToId: number | null; status?: ActionStatus; }
+async function actionRequest<T>(path: string, method: "POST" | "PATCH", body: unknown, idempotencyKey?: string): Promise<T> { const response = await fetch(`${API_URL}${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}`, ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify(body) }); const payload = await response.json() as unknown; if (!response.ok) throw new Error(errorMessage(payload, "Unable to update Actions Taken.")); return payload as T; }
+export function createActionTaken(ticketId: number, input: ActionTakenInput, idempotencyKey: string) { return actionRequest<ActionTaken>(`/api/tickets/${ticketId}/actions-taken`, "POST", input, idempotencyKey); }
+export function updateActionTaken(actionId: number, version: number, input: Partial<ActionTakenInput>) { return actionRequest<ActionTaken>(`/api/actions-taken/${actionId}`, "PATCH", { ...input, version }); }
+export function updateActionTakenStatus(actionId: number, version: number, status: ActionStatus) { return actionRequest<ActionTaken>(`/api/actions-taken/${actionId}/status`, "PATCH", { status, version }); }
 
 async function patchStaff<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });

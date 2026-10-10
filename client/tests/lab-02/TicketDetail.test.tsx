@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TicketDetail from "../../src/TicketDetail.js";
@@ -13,6 +13,7 @@ function DetailHarness({ onBack }: { onBack: () => void }) {
 }
 
 describe("Lab 2 Ticket Detail", () => {
+  beforeEach(() => { vi.spyOn(api, "fetchActionsTaken").mockResolvedValue([]); });
   afterEach(() => vi.restoreAllMocks());
 
   it("shows read-only ticket data and returns to My Tickets", async () => {
