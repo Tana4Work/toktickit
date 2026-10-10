@@ -91,6 +91,101 @@ const STATUS_TRANSITIONS: Record<StaffStatus, readonly StaffStatus[]> = {
   Cancelled: ["Reopened"],
 };
 
+const ACTION_STATUSES = ["Planned", "InProgress", "Completed", "Cancelled"] as const;
+type ActionLifecycleStatus = (typeof ACTION_STATUSES)[number];
+const ACTION_TRANSITIONS: Record<ActionLifecycleStatus, readonly ActionLifecycleStatus[]> = {
+  Planned: ["InProgress", "Cancelled"],
+  InProgress: ["Completed", "Cancelled"],
+  Completed: [],
+  Cancelled: [],
+};
+const MAX_ACTION_TEXT_LENGTH = 4000;
+const MAX_ACTION_NOTES_LENGTH = 2000;
+
+function actionError(res: Response, code: string, message: string, status = 400) {
+  res.status(status).json({ error: { code, message } });
+}
+
+function actionResponse(action: {
+  id: number;
+  ticketId: number;
+  actionDateTime: Date;
+  description: string;
+  result: string;
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  status: string;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  performedBy: { id: number; name: string; email: string; role: string };
+  assignedTo: { id: number; name: string; email: string; role: string } | null;
+}) {
+  return {
+    id: action.id,
+    ticketId: action.ticketId,
+    actionDateTime: action.actionDateTime,
+    description: action.description,
+    result: action.result,
+    performedBy: action.performedBy,
+    assignedTo: action.assignedTo,
+    followUpRequired: action.followUpRequired,
+    followUpNote: action.followUpNote,
+    attachmentNotes: action.attachmentNotes,
+    status: action.status,
+    version: action.version,
+    createdAt: action.createdAt,
+    updatedAt: action.updatedAt,
+  };
+}
+
+const ACTION_SELECT = {
+  id: true,
+  ticketId: true,
+  actionDateTime: true,
+  description: true,
+  result: true,
+  followUpRequired: true,
+  followUpNote: true,
+  attachmentNotes: true,
+  status: true,
+  version: true,
+  createdAt: true,
+  updatedAt: true,
+  performedBy: { select: { id: true, name: true, email: true, role: true } },
+  assignedTo: { select: { id: true, name: true, email: true, role: true } },
+} as const;
+
+function actionDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function actionText(value: unknown, maxLength = MAX_ACTION_TEXT_LENGTH) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= maxLength ? trimmed : null;
+}
+
+function actionStatus(value: unknown): value is ActionLifecycleStatus {
+  return typeof value === "string" && ACTION_STATUSES.includes(value as ActionLifecycleStatus);
+}
+
+async function activeActionAssignee(assignedToId: number | null) {
+  if (assignedToId === null) return null;
+  return getPrisma().user.findFirst({ where: { id: assignedToId, active: true, role: { in: ["ITStaff", "Administrator"] } }, select: { id: true, name: true, email: true, role: true } });
+}
+
+async function actionTicketForUser(ticketId: number, req: AuthenticatedRequest) {
+  const prisma = getPrisma();
+  if (req.user?.role !== "Requester") return prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+  const legacyRequesterId = await legacyRequesterIdForUser(req.user.id);
+  if (!legacyRequesterId) return null;
+  return prisma.ticket.findFirst({ where: { id: ticketId, OR: [{ requesterUserId: req.user.id }, { requesterId: legacyRequesterId }] }, select: { id: true } });
+}
+
 function authBody(req: Request) {
   return isRecord(req.body) ? req.body : {};
 }
@@ -434,6 +529,115 @@ app.post("/api/tickets/:ticketId/problem-resolved", ...requireRequester, async (
     const updated = await getPrisma().ticket.update({ where: { id: ticketId }, data: { problemAppearsResolvedAt: new Date(), problemAppearsResolvedById: req.user!.id }, select: { id: true, problemAppearsResolvedAt: true } });
     res.status(200).json({ problemAppearsResolvedAt: updated.problemAppearsResolvedAt });
   } catch { res.status(500).json({ error: { code: "RESOLUTION_INDICATION_ERROR", message: "Unable to record the resolution indication." } }); }
+});
+
+app.get("/api/tickets/:ticketId/actions-taken", ...requireApplicationUser, async (req: AuthenticatedRequest, res: Response) => {
+  const ticketId = Number(req.params.ticketId);
+  if (!Number.isInteger(ticketId) || ticketId < 1) { actionError(res, "INVALID_TICKET", "Invalid Ticket ID."); return; }
+  try {
+    const ticket = await actionTicketForUser(ticketId, req);
+    if (!ticket) { actionError(res, "TICKET_NOT_FOUND", "Ticket not found.", 404); return; }
+    const actions = await getPrisma().actionTaken.findMany({ where: { ticketId }, orderBy: [{ actionDateTime: "asc" }, { id: "asc" }], select: ACTION_SELECT });
+    res.status(200).json(actions.map(actionResponse));
+  } catch { actionError(res, "ACTION_LIST_ERROR", "Unable to load Actions Taken.", 500); }
+});
+
+app.post("/api/tickets/:ticketId/actions-taken", ...requireApplicationUser, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user!.role === "Requester") { actionError(res, "FORBIDDEN", "Requesters cannot create Actions Taken.", 403); return; }
+  const ticketId = Number(req.params.ticketId);
+  const body = authBody(req);
+  const idempotencyKey = req.header("Idempotency-Key")?.trim();
+  const dateTime = actionDate(body.actionDateTime);
+  const description = actionText(body.description);
+  const result = actionText(body.result);
+  const followUpRequired = body.followUpRequired;
+  const followUpNote = body.followUpNote === undefined || body.followUpNote === null ? null : actionText(body.followUpNote, MAX_ACTION_NOTES_LENGTH);
+  const attachmentNotes = body.attachmentNotes === undefined || body.attachmentNotes === null ? null : actionText(body.attachmentNotes, MAX_ACTION_NOTES_LENGTH);
+  const status = body.status === undefined ? "Planned" : body.status;
+  const assignedToId = body.assignedToId === undefined || body.assignedToId === null ? null : Number(body.assignedToId);
+  if (!Number.isInteger(ticketId) || ticketId < 1) { actionError(res, "INVALID_TICKET", "Invalid Ticket ID."); return; }
+  if (!idempotencyKey || idempotencyKey.length > 120) { actionError(res, "IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required."); return; }
+  if (!dateTime || !description || !result || typeof followUpRequired !== "boolean" || !actionStatus(status)) { actionError(res, "INVALID_ACTION", "Action date/time, description, result, follow-up flag, and valid status are required."); return; }
+  if (followUpRequired && !followUpNote) { actionError(res, "FOLLOW_UP_NOTE_REQUIRED", "A follow-up note is required when follow-up is needed."); return; }
+  if (!followUpRequired && body.followUpNote !== undefined && body.followUpNote !== null && followUpNote === null) { actionError(res, "INVALID_FOLLOW_UP_NOTE", "Follow-up Note is invalid."); return; }
+  if (body.attachmentNotes !== undefined && body.attachmentNotes !== null && attachmentNotes === null) { actionError(res, "INVALID_ATTACHMENT_NOTES", "Attachment Notes are invalid."); return; }
+  if (assignedToId !== null && (!Number.isInteger(assignedToId) || assignedToId < 1)) { actionError(res, "INVALID_ASSIGNEE", "Assigned user must be an active IT Staff or Administrator."); return; }
+  try {
+    const prisma = getPrisma();
+    const fingerprint = requestFingerprint({ ticketId, actionDateTime: dateTime.toISOString(), description, result, followUpRequired, followUpNote, attachmentNotes, status, assignedToId });
+    const existingAction = await prisma.actionTaken.findUnique({ where: { idempotencyKey }, select: { id: true, ticketId: true, requestFingerprint: true } });
+    if (existingAction) {
+      if (existingAction.ticketId !== ticketId || existingAction.requestFingerprint !== fingerprint) { actionError(res, "IDEMPOTENCY_CONFLICT", "This Idempotency-Key was already used with different Action data.", 409); return; }
+      const original = await prisma.actionTaken.findUniqueOrThrow({ where: { id: existingAction.id }, select: ACTION_SELECT });
+      res.status(200).json(actionResponse(original));
+      return;
+    }
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+    if (!ticket) { actionError(res, "TICKET_NOT_FOUND", "Ticket not found.", 404); return; }
+    const assignee = await activeActionAssignee(assignedToId);
+    if (assignedToId !== null && !assignee) { actionError(res, "INVALID_ASSIGNEE", "Assigned user must be an active IT Staff or Administrator.", 422); return; }
+    const action = await prisma.actionTaken.create({ data: { ticketId, actionDateTime: dateTime, description, result, performedById: req.user!.id, assignedToId, followUpRequired, followUpNote, attachmentNotes, status, idempotencyKey, requestFingerprint: fingerprint }, select: ACTION_SELECT });
+    res.status(201).json(actionResponse(action));
+  } catch { actionError(res, "ACTION_CREATE_ERROR", "Unable to create Action Taken.", 500); }
+});
+
+app.patch("/api/actions-taken/:actionId", ...requireApplicationUser, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user!.role === "Requester") { actionError(res, "FORBIDDEN", "Requesters cannot update Actions Taken.", 403); return; }
+  const actionId = Number(req.params.actionId);
+  const body = authBody(req);
+  const version = Number(body.version);
+  if (!Number.isInteger(actionId) || actionId < 1) { actionError(res, "INVALID_ACTION", "Invalid Action Taken ID."); return; }
+  if (!Number.isInteger(version) || version < 1) { actionError(res, "VERSION_REQUIRED", "A current Action Taken version is required."); return; }
+  try {
+    const prisma = getPrisma();
+    const existing = await prisma.actionTaken.findUnique({ where: { id: actionId }, select: { ticketId: true, version: true, followUpRequired: true, followUpNote: true } });
+    if (!existing) { actionError(res, "ACTION_NOT_FOUND", "Action Taken not found.", 404); return; }
+    if (existing.version !== version) { actionError(res, "STALE_ACTION", "Action Taken has changed. Reload it before updating.", 409); return; }
+    const data: Prisma.ActionTakenUncheckedUpdateManyInput = {};
+    if (body.actionDateTime !== undefined) { const parsed = actionDate(body.actionDateTime); if (!parsed) { actionError(res, "INVALID_ACTION_DATE", "Action date/time is invalid."); return; } data.actionDateTime = parsed; }
+    if (body.description !== undefined) { const value = actionText(body.description); if (!value) { actionError(res, "INVALID_DESCRIPTION", "Action Description is required and must be 4000 characters or fewer."); return; } data.description = value; }
+    if (body.result !== undefined) { const value = actionText(body.result); if (!value) { actionError(res, "INVALID_RESULT", "Result is required and must be 4000 characters or fewer."); return; } data.result = value; }
+    if (body.assignedToId !== undefined) {
+      const assignedToId = body.assignedToId === null ? null : Number(body.assignedToId);
+      if (assignedToId !== null && (!Number.isInteger(assignedToId) || assignedToId < 1)) { actionError(res, "INVALID_ASSIGNEE", "Assigned user must be an active IT Staff or Administrator."); return; }
+      const assignee = await activeActionAssignee(assignedToId);
+      if (assignedToId !== null && !assignee) { actionError(res, "INVALID_ASSIGNEE", "Assigned user must be an active IT Staff or Administrator.", 422); return; }
+      data.assignedToId = assignedToId;
+    }
+    if (body.followUpRequired !== undefined) { if (typeof body.followUpRequired !== "boolean") { actionError(res, "INVALID_FOLLOW_UP", "Follow-up Required must be true or false."); return; } data.followUpRequired = body.followUpRequired; }
+    const nextFollowUpRequired = data.followUpRequired === undefined ? existing.followUpRequired : Boolean(data.followUpRequired);
+    if (body.followUpNote !== undefined) { const value = body.followUpNote === null ? null : actionText(body.followUpNote, MAX_ACTION_NOTES_LENGTH); if (body.followUpNote !== null && value === null) { actionError(res, "INVALID_FOLLOW_UP_NOTE", "Follow-up Note is invalid."); return; } data.followUpNote = value; }
+    const nextFollowUpNote = data.followUpNote === undefined ? existing.followUpNote : data.followUpNote;
+    if (nextFollowUpRequired && !nextFollowUpNote) { actionError(res, "FOLLOW_UP_NOTE_REQUIRED", "A follow-up note is required when follow-up is needed."); return; }
+    if (body.attachmentNotes !== undefined) { const value = body.attachmentNotes === null ? null : actionText(body.attachmentNotes, MAX_ACTION_NOTES_LENGTH); if (body.attachmentNotes !== null && value === null) { actionError(res, "INVALID_ATTACHMENT_NOTES", "Attachment Notes are invalid."); return; } data.attachmentNotes = value; }
+    if (Object.keys(data).length === 0) { actionError(res, "NO_ACTION_CHANGES", "At least one editable Action Taken field is required."); return; }
+    const updated = await prisma.actionTaken.updateMany({ where: { id: actionId, version }, data: { ...data, version: { increment: 1 } } });
+    if (updated.count !== 1) { actionError(res, "STALE_ACTION", "Action Taken has changed. Reload it before updating.", 409); return; }
+    const action = await prisma.actionTaken.findUniqueOrThrow({ where: { id: actionId }, select: ACTION_SELECT });
+    res.status(200).json(actionResponse(action));
+  } catch { actionError(res, "ACTION_UPDATE_ERROR", "Unable to update Action Taken.", 500); }
+});
+
+app.patch("/api/actions-taken/:actionId/status", ...requireApplicationUser, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user!.role === "Requester") { actionError(res, "FORBIDDEN", "Requesters cannot change Action Taken status.", 403); return; }
+  const actionId = Number(req.params.actionId);
+  const body = authBody(req);
+  const nextStatus = body.status;
+  const version = Number(body.version);
+  if (!Number.isInteger(actionId) || actionId < 1 || !actionStatus(nextStatus)) { actionError(res, "INVALID_ACTION_STATUS", "Invalid Action Taken status."); return; }
+  if (!Number.isInteger(version) || version < 1) { actionError(res, "VERSION_REQUIRED", "A current Action Taken version is required."); return; }
+  try {
+    const prisma = getPrisma();
+    const existing = await prisma.actionTaken.findUnique({ where: { id: actionId }, select: { status: true, version: true, followUpRequired: true, followUpNote: true } });
+    if (!existing) { actionError(res, "ACTION_NOT_FOUND", "Action Taken not found.", 404); return; }
+    if (existing.version !== version) { actionError(res, "STALE_ACTION", "Action Taken has changed. Reload it before updating.", 409); return; }
+    if (!ACTION_TRANSITIONS[existing.status as ActionLifecycleStatus].includes(nextStatus)) { actionError(res, "INVALID_ACTION_TRANSITION", `Cannot change Action Taken from ${existing.status} to ${nextStatus}.`, 422); return; }
+    if (nextStatus === "Completed" && existing.followUpRequired && !existing.followUpNote) { actionError(res, "FOLLOW_UP_NOTE_REQUIRED", "A follow-up note is required before completing this Action Taken.", 422); return; }
+    const updated = await prisma.actionTaken.updateMany({ where: { id: actionId, version }, data: { status: nextStatus, version: { increment: 1 } } });
+    if (updated.count !== 1) { actionError(res, "STALE_ACTION", "Action Taken has changed. Reload it before updating.", 409); return; }
+    const action = await prisma.actionTaken.findUniqueOrThrow({ where: { id: actionId }, select: ACTION_SELECT });
+    res.status(200).json(actionResponse(action));
+  } catch { actionError(res, "ACTION_STATUS_ERROR", "Unable to update Action Taken status.", 500); }
 });
 
 app.get("/api/staff/tickets", ...requireStaff, async (req: AuthenticatedRequest, res: Response) => {

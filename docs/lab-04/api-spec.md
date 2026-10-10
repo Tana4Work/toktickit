@@ -18,7 +18,11 @@
 | PATCH | `/actions-taken/:actionId` | Update permitted Action fields with stale-update protection. |
 | PATCH | `/actions-taken/:actionId/status` | Apply an approved Action lifecycle change, if included in the final contract. |
 
-The server derives `performedBy` from the authenticated session. The client cannot impersonate another performer. Requesters may use the GET operation only when the Ticket is theirs. IT Staff and Administrators may write only on accessible Tickets. The API rejects missing conditional follow-up notes, invalid dates, invalid assignments, inactive assignees, duplicate submissions, and stale versions.
+`POST /tickets/:ticketId/actions-taken` requires an `Idempotency-Key` header and accepts `actionDateTime`, `description`, `result`, `followUpRequired`, optional `followUpNote`, optional `attachmentNotes`, optional `assignedToId`, and optional initial `status` (default `Planned`). The server derives `performedBy` from the authenticated session. The client cannot impersonate another performer. Repeating the same idempotency key and request returns the original Action; reusing it with different data returns `409`.
+
+`PATCH /actions-taken/:actionId` requires the current integer `version` and may update action date/time, description, result, assignment, follow-up fields, or attachment notes. A successful update increments `version`. `PATCH /actions-taken/:actionId/status` requires the current version and supports `Planned -> InProgress`, `Planned -> Cancelled`, `InProgress -> Completed`, and `InProgress -> Cancelled`. Completed and Cancelled Actions are terminal. Completing an Action with required follow-up requires a non-empty Follow-up Note.
+
+Requesters may use the GET operation only when the Ticket is theirs. IT Staff and Administrators may write only on accessible Tickets. The API rejects missing conditional follow-up notes, invalid dates, invalid assignments, inactive assignees, duplicate submissions, and stale versions.
 
 ## Ticket Workflow
 

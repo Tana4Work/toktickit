@@ -60,10 +60,12 @@ The backend is authoritative. Hidden or disabled controls do not replace API aut
 - **BR-10:** The backend rejects forbidden or invalid transitions even when a client bypasses the normal UI.
 - **BR-11:** Dashboard metrics are calculated from authoritative backend data and return zero/empty values safely when no records match.
 - **BR-12:** Stale or conflicting updates must not silently overwrite newer workflow data.
+- **BR-13:** Repeating an Action Taken request with the same idempotency key and data returns the original record; reusing the key with different data returns a conflict.
+- **BR-14:** Action statuses are Planned, InProgress, Completed, and Cancelled. Completed and Cancelled are terminal.
 
 ## 7. Data and Migration Decisions
 
-Add an `ActionTaken` model related to `Ticket`, `User`, and any approved status/reference data. Use UTC timestamps, foreign keys, indexes for Ticket/date/performer queries, and a version or equivalent stale-update check. The migration preserves all existing Users, Tickets, Attachments, Public Comments, and Internal Notes. Existing Tickets may have zero Actions Taken and remain valid. Seed data is idempotent and covers zero, one, and multiple Actions Taken plus dashboard empty/non-empty cases.
+Add an `ActionTaken` model related to `Ticket`, `User`, and any approved status/reference data. Use UTC timestamps, foreign keys, indexes for Ticket/date/performer queries, and a version or equivalent stale-update check. The migration is additive: it creates the ActionTaken table, enum, indexes, and foreign keys without rewriting existing records. Recovery is to stop application writes, restore the database backup, and redeploy the prior migration set; removing the new table is only acceptable before any Lab 4 data is retained. The migration preserves all existing Users, Tickets, Attachments, Public Comments, and Internal Notes. Existing Tickets may have zero Actions Taken and remain valid. Seed data is idempotent and covers zero, one, and multiple Actions Taken plus dashboard empty/non-empty cases.
 
 ## 8. API Contract Summary
 
