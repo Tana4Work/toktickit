@@ -14,7 +14,7 @@ test("requires the seeded user to change an initial password", async ({ page }) 
   await page.locator("#login-password").fill("Requester123!");
   await page.getByRole("button", { name: "Sign In" }).click();
   const changePassword = page.getByRole("heading", { name: "Change Your Password" });
-  const myTickets = page.getByRole("heading", { name: "My Tickets" });
-  await expect(changePassword.or(myTickets)).toBeVisible();
+  const dashboard = page.getByRole("heading", { name: "Requester Dashboard" });
+  await expect(changePassword.or(dashboard)).toBeVisible();
   if (await changePassword.count()) await expect(page.getByText("You must change your password to continue.")).toBeVisible();
 });

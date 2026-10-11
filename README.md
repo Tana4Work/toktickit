@@ -38,7 +38,7 @@ npx prisma migrate deploy
 npm run prisma:seed
 ~~~
 
-The seed is idempotent and creates four Categories, seven Related Systems, four active Development Requesters, and one inactive Development Requester. Only active Requesters are shown in the Lab 2 selector.
+The seed is idempotent and creates the Lab 2 reference data, authenticated Lab 3 users, Lab 4 Tickets, and Actions Taken records. It can be rerun safely after migrations.
 
 ## Run the backend
 
@@ -66,7 +66,7 @@ cd client
 npm run dev
 ~~~
 
-Open http://localhost:5175. The first screen is the Lab 2 Development Requester Selection screen. Select an active requester and click Continue; this is a testing context, not authentication. No navigation item is selected before Continue. My Tickets opens first after Continue, and Create Ticket is available from the header. Use Change Requester in the header to switch the testing context.
+Open http://localhost:5174. Sign in with a seeded account. Requesters see the Requester Dashboard, while IT Staff and Administrators see the Staff Dashboard and their role-appropriate navigation. The Playwright E2E server uses port 5175 as an isolated test server so it does not conflict with the normal development frontend on port 5174.
 
 The frontend calls the requester, reference-data, ticket, and attachment endpoints. It shows loading, success, validation, empty, no-results, and safe API-failure states.
 
@@ -110,7 +110,7 @@ npx playwright install chromium
 npm run test:e2e
 ~~~
 
-The E2E flow covers requester selection, ticket creation, creation-time attachment upload, My Tickets, and Ticket Detail. The Playwright configuration is in `playwright.config.ts` and the test is in `e2e/lab-02/requester-ticket-flow.spec.ts`.
+The E2E suite covers authenticated requester ticket creation, attachments, Ticket Detail, Lab 3 authentication/staff/admin regression, Lab 4 requester and staff dashboards, dashboard drill-down, and desktop/tablet/mobile overflow checks. The Playwright configuration is in `playwright.config.ts`.
 
 For final delivery evidence, see `docs/lab-02/tests.md` and `docs/lab-02/reviewer.md`.
 
@@ -142,7 +142,7 @@ main
     `-- feature/lab4-06-integration-submission-release
 ~~~
 
-Issue 1 is the current planning increment. Its branch is `feature/lab4-01-docs-test-planning`. Later issue branches should be created from the updated `lab4-staging` after the preceding issue has been merged.
+Issue 5 is the current QA increment on `feature/lab4-05-regression-responsive-visual-qa`. Its dedicated Lab 4 API, component, E2E, responsive, and performance checks are included in this branch. Later issue branches should be created from the updated `lab4-staging` after the preceding issue has been merged.
 
 ## Lab 4 test and migration commands
 
@@ -168,7 +168,16 @@ From the repository root, run E2E tests with PostgreSQL available:
 npm run test:e2e
 ~~~
 
-The final Lab 4 evidence must show migration/seed behavior, API and UI tests, dashboard calculations and drill-downs, Actions Taken, Ticket workflow, regression behavior, responsive/accessibility checks, peer review, and final branch integration.
+The Lab 4 test coverage includes:
+
+- `server/tests/lab-04/actions-taken.api.test.ts` for Actions Taken authorization, validation, idempotency, and lifecycle behavior.
+- `server/tests/lab-04/workflow-dashboards.api.test.ts` for workflow/dashboard API behavior and dashboard authorization.
+- `server/tests/lab-04/performance-smoke.test.ts` for health, dashboard, and Ticket detail response smoke checks.
+- `client/tests/lab-04/ActionsTakenPanel.test.tsx` and `client/tests/lab-04/TicketWorkflow.test.tsx` for Actions Taken and workflow UI behavior.
+- `client/tests/lab-04/RequesterDashboard.test.tsx`, `StaffDashboard.test.tsx`, and `Dashboard.test.tsx` for dashboard metrics, empty states, and drill-down controls.
+- `e2e/lab-04/dashboards.spec.ts` for dashboard flows and responsive desktop/tablet/mobile checks.
+
+The final Lab 4 evidence must also show migration/seed behavior, full regression, accessibility/visual inspection, peer review, and final branch integration.
 
 ## Historical Lab 2 branch workflow
 
