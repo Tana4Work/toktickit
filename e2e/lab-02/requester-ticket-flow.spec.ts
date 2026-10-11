@@ -3,12 +3,20 @@ import { expect, test } from "@playwright/test";
 test("requester can create, list, and open an owned ticket with an attachment", async ({ page }) => {
   await page.goto("/");
 
-  const requesterSelect = page.getByLabel("Development Requester", { exact: true });
-  await expect(requesterSelect).toBeVisible();
-  await expect(page.getByRole("button", { name: "My Tickets" })).toBeDisabled();
-  await requesterSelect.selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Email address").fill("anan.srisuk@example.com");
+  await page.locator("#login-password").fill("Requester123!");
+  await page.getByRole("button", { name: "Sign In" }).click();
 
+  const changePassword = page.getByRole("heading", { name: "Change Your Password" });
+  if (await changePassword.count()) {
+    await page.getByLabel("Current (temporary) password").fill("Requester123!");
+    await page.getByLabel("New password").fill("Lab3RequesterE2e123!");
+    await page.getByLabel("Confirm new password").fill("Lab3RequesterE2e123!");
+    await page.getByRole("button", { name: "Continue" }).click();
+  }
+
+  await expect(page.getByRole("heading", { name: "Requester Dashboard" })).toBeVisible();
+  await page.getByRole("button", { name: "My Tickets" }).click();
   await expect(page.getByRole("heading", { name: "My Tickets" })).toBeVisible();
   await page.getByRole("button", { name: "Create Ticket" }).click();
   await expect(page.getByRole("heading", { name: "Create Ticket" })).toBeVisible();
@@ -31,6 +39,7 @@ test("requester can create, list, and open an owned ticket with an attachment", 
   await expect(page.getByRole("button", { name: number! })).toBeVisible();
   await page.getByRole("button", { name: number! }).click();
   await expect(page.getByRole("heading", { name: "Ticket Detail" })).toBeVisible();
+  await expect(page.getByText("Loading ticket detail...")).toBeHidden();
   await expect(page.getByText(number!)).toBeVisible();
   await expect(page.getByText("e2e-proof.pdf")).toBeVisible();
 

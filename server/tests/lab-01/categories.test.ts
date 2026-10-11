@@ -1,7 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
+import { loginAs, requesterEmail, requesterPassword } from "../helpers/auth.js";
+
+let token: string;
+beforeAll(async () => { token = await loginAs(requesterEmail, requesterPassword); });
 
 describe("GET /api/categories", () => {
   afterEach(() => {
@@ -9,7 +13,7 @@ describe("GET /api/categories", () => {
   });
 
   it("returns the four seeded categories with only id and name in id order", async () => {
-    const res = await request(app).get("/api/categories");
+    const res = await request(app).get("/api/categories").set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(4);
@@ -30,7 +34,7 @@ describe("GET /api/categories", () => {
       new Error("password=secret SQL SELECT internal details"),
     );
 
-    const res = await request(app).get("/api/categories");
+    const res = await request(app).get("/api/categories").set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: "Unable to load categories." });

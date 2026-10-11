@@ -427,8 +427,10 @@ app.get("/api/tickets", ...requireRequester, async (req: AuthenticatedRequest, r
   }
 
   const where: Prisma.TicketWhereInput = {
-    OR: [{ requesterUserId: req.user!.id }, ...(Number.isInteger(requesterId) ? [{ requesterId }] : [])],
-    ...(search ? { OR: [{ ticketNumber: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }] } : {}),
+    AND: [
+      { OR: [{ requesterUserId: req.user!.id }, ...(Number.isInteger(requesterId) ? [{ requesterId }] : [])] },
+      ...(search ? [{ OR: [{ ticketNumber: { contains: search, mode: "insensitive" as Prisma.QueryMode } }, { summary: { contains: search, mode: "insensitive" as Prisma.QueryMode } }] }] : []),
+    ],
     ...(parsedCategoryId === undefined ? {} : { categoryId: parsedCategoryId }),
     ...(parsedRelatedSystemId === undefined ? {} : { relatedSystemId: parsedRelatedSystemId }),
     ...(requestedPriority === undefined ? {} : { requestedPriority: requestedPriority as (typeof ALLOWED_PRIORITIES)[number] }),
