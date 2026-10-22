@@ -1,4 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+const screenshotRoot = "artifacts/lab-04/screenshots/actions-taken";
+await mkdir(screenshotRoot, { recursive: true });
 
 async function signIn(page: Page) {
   await page.goto("/");
@@ -30,4 +34,5 @@ test("IT Staff can view and record an Action Taken", async ({ page }) => {
   await page.getByLabel("Result *").fill("The service was checked successfully.");
   await page.getByRole("button", { name: "Save Action Taken" }).click();
   await expect(page.getByText("Action Taken created successfully.", { exact: true })).toBeVisible();
+  await page.screenshot({ path: `${screenshotRoot}/staff-actions-taken.png`, fullPage: true });
 });

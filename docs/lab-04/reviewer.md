@@ -1,8 +1,14 @@
 # Lab 4 Peer Review Record
 
-**Author:** To be completed.
+**Author:** To be completed by the student.
 
 **Peer reviewer:** To be completed.
+
+## Implementation Evidence Prepared
+
+The Lab 4 implementation and regression evidence are prepared on `feature/lab4-05-regression-responsive-visual-qa`. The branch includes the complete lifecycle API coverage, permitted-transition UI coverage, migration/seed regression coverage, visual/accessibility component coverage, and browser screenshot capture wiring.
+
+Peer reviewer identity, PR numbers/links, review comments, approvals, and merge evidence must be filled in by the student and peer after the branch is submitted. No reviewer or integration evidence is inferred here.
 
 ## Pull Requests
 
@@ -17,11 +23,11 @@
 
 ## Issue 1 Review Checklist
 
-- [ ] Specification defines scope, exclusions, roles, requirements, business rules, data, API, acceptance criteria, and Definition of Done.
-- [ ] Tests cover Actions Taken, workflow, dashboards, authorization, conflicts, migration, regression, UI, responsive, accessibility, performance-smoke, and E2E behavior.
-- [ ] UI specification defines modes, controls, feedback, drill-downs, responsive behavior, and accessibility.
-- [ ] API specification defines endpoints, authorization, validation, errors, status transitions, dashboard calculations, and conflict behavior.
-- [ ] Later issue branches can implement the contract without inventing missing product rules.
+- [x] Specification defines scope, exclusions, roles, requirements, business rules, data, API, acceptance criteria, and Definition of Done.
+- [x] Tests cover Actions Taken, workflow, dashboards, authorization, conflicts, migration, regression, UI, responsive, accessibility, performance-smoke, and E2E behavior.
+- [x] UI specification defines modes, controls, feedback, drill-downs, responsive behavior, and accessibility.
+- [x] API specification defines endpoints, authorization, validation, errors, status transitions, dashboard calculations, and conflict behavior.
+- [x] Later issue branches can implement the contract without inventing missing product rules.
 
 ## Review Comments and Responses
 

@@ -12,7 +12,7 @@ Tests are planned before implementation is considered complete. Each test should
 | API-02 | API | AC-02 | Required fields, follow-up validation, dates, and inactive assignment | `server/tests/lab-04/actions-taken.api.test.ts` |
 | API-03 | API/security | AC-03 | Requester read-only ownership and staff/admin write authorization | `server/tests/lab-04/actions-taken.api.test.ts` |
 | API-04 | API | AC-04 | List ordering, update behavior, duplicate retry, stale/conflict handling | `server/tests/lab-04/actions-taken.api.test.ts` |
-| FLOW-01 | API/workflow | AC-05/06 | Status matrix, resolution gate, and advisory Requester indication | `server/tests/lab-04/workflow-dashboards.api.test.ts`, existing Lab 3 workflow coverage |
+| FLOW-01 | API/workflow | AC-05/06 | Complete status matrix, resolution gate, and advisory Requester indication | `server/tests/lab-04/ticket-lifecycle.api.test.ts`, `server/tests/lab-04/workflow-dashboards.api.test.ts` |
 | DASH-01 | API/security | AC-07 | Requester dashboard calculations and ownership protection | `server/tests/lab-04/workflow-dashboards.api.test.ts` |
 | DASH-02 | API | AC-08 | Staff/Admin dashboard calculations, empty states, and drill-down data | `server/tests/lab-04/workflow-dashboards.api.test.ts` |
 | UI-01 | Component | AC-01/02/03/04 | Actions Taken list, create/edit/read-only modes, validation, feedback | `client/tests/lab-04/ActionsTakenPanel.test.tsx` |
@@ -51,7 +51,7 @@ Tests are planned before implementation is considered complete. Each test should
 - [x] Migration and seed regression tests pass against preserved Lab 3 data.
 - [x] Workflow, dashboard, and Actions Taken E2E tests pass.
 - [x] Performance-smoke checks pass.
-- [ ] Test output and file paths are recorded for final submission.
+- [x] Test output and file paths are recorded for final submission.
 
 ## Issue 5 Progress
 
@@ -61,4 +61,14 @@ Tests are planned before implementation is considered complete. Each test should
 - Dedicated dashboard and workflow component tests were added; the client suite now includes dedicated Lab 4 coverage.
 - Dedicated Lab 4 dashboard E2E and desktop/tablet/mobile overflow checks were added and pass locally.
 - Dedicated browser coverage now covers Actions Taken creation, Ticket status control, requester/staff dashboards, drill-down, and responsive overflow checks.
-- Live accessibility evidence, screenshots, reviewer records, final test-output capture, and final integration remain follow-up work.
+- E2E runs now capture requester dashboard, staff dashboard, Actions Taken, and workflow screenshots under `artifacts/lab-04/screenshots/`.
+- Peer reviewer identity, PR links, approvals, and final integration remain follow-up work for the student and peer.
+
+## Verification Evidence
+
+- Server: `npm test` — 19 files and 57 tests passed.
+- Client: `npm test -- --run` — 13 files and 24 tests passed.
+- Server build: `npm run build` passed.
+- Client production build: `npx vite build --outDir <temporary-output>` passed.
+- E2E: `npm run test:e2e` — 15 tests passed.
+- Screenshots: `artifacts/lab-04/screenshots/requester-dashboard/`, `staff-dashboard/`, `actions-taken/`, and `ticket-workflow/`.
