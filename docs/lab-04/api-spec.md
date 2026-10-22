@@ -76,4 +76,4 @@ The exact keys and labels must be kept consistent with `specification.md`, `ui-s
 - [x] Authorization matrix is tested for Requester, IT Staff, and Administrator.
 - [x] Status-transition matrix and resolution gate are documented.
 - [x] Dashboard calculations, dates, empty states, and drill-downs are documented.
-- [ ] Conflict, retry, and safe-error behavior is documented.
+- [x] Conflict, retry, and safe-error behavior is documented.

@@ -1,4 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+const screenshotRoot = "artifacts/lab-04/screenshots";
+await mkdir(`${screenshotRoot}/requester-dashboard`, { recursive: true });
+await mkdir(`${screenshotRoot}/staff-dashboard`, { recursive: true });
 
 async function signIn(page: Page, email: string, password: string, newPassword: string) {
   await page.goto("/");
@@ -18,6 +23,7 @@ test("Requester dashboard shows metrics and drills down to owned tickets", async
   await signIn(page, "anan.srisuk@example.com", "Requester123!", "Lab4RequesterE2e123!");
   await expect(page.getByRole("heading", { name: "Requester Dashboard" })).toBeVisible();
   await expect(page.getByText("Open Tickets")).toBeVisible();
+  await page.screenshot({ path: `${screenshotRoot}/requester-dashboard/desktop.png`, fullPage: true });
   await page.getByRole("button", { name: /Open Tickets/ }).click();
   await expect(page.getByRole("heading", { name: "My Tickets" })).toBeVisible();
 });
@@ -26,6 +32,7 @@ test("Staff dashboard shows operational metrics and drills down to the queue", a
   await signIn(page, "it.staff.one@example.com", "ITStaff123!", "Lab4StaffE2e123!");
   await expect(page.getByRole("heading", { name: "Staff Dashboard" })).toBeVisible();
   await expect(page.getByText("Ticket Status Counts")).toBeVisible();
+  await page.screenshot({ path: `${screenshotRoot}/staff-dashboard/desktop.png`, fullPage: true });
   await page.getByRole("button", { name: /My Owned Tickets/ }).click();
   await expect(page.getByRole("heading", { name: "My Queue" })).toBeVisible();
 });
@@ -35,6 +42,7 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await signIn(page, "anan.srisuk@example.com", "Requester123!", "Lab4RequesterE2e123!");
     await expect(page.getByRole("heading", { name: "Requester Dashboard" })).toBeVisible();
+    await page.screenshot({ path: `${screenshotRoot}/requester-dashboard/${viewport.name}.png`, fullPage: true });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow, `dashboard must not overflow horizontally at ${viewport.name}`).toBe(false);
   });

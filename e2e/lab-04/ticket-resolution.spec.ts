@@ -1,4 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+const screenshotRoot = "artifacts/lab-04/screenshots/ticket-workflow";
+await mkdir(screenshotRoot, { recursive: true });
 
 async function signIn(page: Page) {
   await page.goto("/");
@@ -28,4 +32,5 @@ test("IT Staff can use the Ticket status workflow control", async ({ page }) => 
   await status.selectOption("Open");
   await expect(status).toHaveValue("Open");
   await expect(page.getByRole("heading", { name: "TK-2026-000027" })).toBeVisible();
+  await page.screenshot({ path: `${screenshotRoot}/staff-ticket-workflow.png`, fullPage: true });
 });
