@@ -12,6 +12,8 @@ test("Administrator can complete first login and reach User Management", async (
     await page.getByLabel("Confirm new password").fill("Lab3AdminE2e123!");
     await page.getByRole("button", { name: "Continue" }).click();
   }
+  await expect(page.getByRole("heading", { name: "Staff Dashboard" })).toBeVisible();
+  await page.getByRole("button", { name: "User Management" }).click();
   await expect(page.getByRole("heading", { name: "User Management" })).toBeVisible();
   await expect(page.getByLabel("Search users")).toBeVisible();
   await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();

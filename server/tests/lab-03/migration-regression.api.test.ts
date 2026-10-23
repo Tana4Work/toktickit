@@ -19,11 +19,17 @@ describe("Lab 2 migration and ownership regression", () => {
   });
 
   it("keeps seed data idempotent", async () => {
-    const before = { users: await prisma.user.count(), categories: await prisma.category.count(), systems: await prisma.relatedSystem.count() };
+    const seedEmails = ["anan.srisuk@example.com", "boonmee.chaiyo@example.com", "chalida.wongsa@example.com", "darin.kittisak@example.com", "inactive.user@example.com", "it.staff.one@example.com", "it.staff.two@example.com", "it.staff.three@example.com", "inactive.staff@example.com", "admin@example.com"];
     await seedReferenceData(prisma);
-    expect(await prisma.user.count()).toBe(before.users);
-    expect(await prisma.category.count()).toBe(before.categories);
-    expect(await prisma.relatedSystem.count()).toBe(before.systems);
+    const afterFirstSeed = {
+      users: await prisma.user.count({ where: { email: { in: seedEmails } } }),
+      categories: await prisma.category.count(),
+      systems: await prisma.relatedSystem.count(),
+    };
+    await seedReferenceData(prisma);
+    expect(await prisma.user.count({ where: { email: { in: seedEmails } } })).toBe(afterFirstSeed.users);
+    expect(await prisma.category.count()).toBe(afterFirstSeed.categories);
+    expect(await prisma.relatedSystem.count()).toBe(afterFirstSeed.systems);
   });
 });
 

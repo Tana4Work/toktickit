@@ -1,4 +1,4 @@
-# TokTickIT Lab 3
+# TokTickIT Lab 4
 
 TokTickIT is a small React and Express service-desk application backed by PostgreSQL and Prisma.
 
@@ -38,7 +38,7 @@ npx prisma migrate deploy
 npm run prisma:seed
 ~~~
 
-The seed is idempotent and creates four Categories, seven Related Systems, four active Development Requesters, and one inactive Development Requester. Only active Requesters are shown in the Lab 2 selector.
+The seed is idempotent and creates the Lab 2 reference data, authenticated Lab 3 users, Lab 4 Tickets, and Actions Taken records. It can be rerun safely after migrations.
 
 ## Run the backend
 
@@ -66,7 +66,7 @@ cd client
 npm run dev
 ~~~
 
-Open http://localhost:5175. The first screen is the Lab 2 Development Requester Selection screen. Select an active requester and click Continue; this is a testing context, not authentication. No navigation item is selected before Continue. My Tickets opens first after Continue, and Create Ticket is available from the header. Use Change Requester in the header to switch the testing context.
+Open http://localhost:5174. Sign in with a seeded account. Requesters see the Requester Dashboard, while IT Staff and Administrators see the Staff Dashboard and their role-appropriate navigation. The Playwright E2E server uses port 5175 as an isolated test server so it does not conflict with the normal development frontend on port 5174.
 
 The frontend calls the requester, reference-data, ticket, and attachment endpoints. It shows loading, success, validation, empty, no-results, and safe API-failure states.
 
@@ -110,11 +110,76 @@ npx playwright install chromium
 npm run test:e2e
 ~~~
 
-The E2E flow covers requester selection, ticket creation, creation-time attachment upload, My Tickets, and Ticket Detail. The Playwright configuration is in `playwright.config.ts` and the test is in `e2e/lab-02/requester-ticket-flow.spec.ts`.
+The E2E suite covers authenticated requester ticket creation, attachments, Ticket Detail, Lab 3 authentication/staff/admin regression, Lab 4 requester and staff dashboards, dashboard drill-down, and desktop/tablet/mobile overflow checks. The Playwright configuration is in `playwright.config.ts`.
 
 For final delivery evidence, see `docs/lab-02/tests.md` and `docs/lab-02/reviewer.md`.
 
-## Branch workflow
+## Lab 4 engineering contract
+
+Lab 4 completes the service-desk workflow with Actions Taken, final Ticket status enforcement, role-appropriate dashboards, and final regression hardening. The approved contract and traceability documents are in `docs/lab-04/`:
+
+- `specification.md` - requirements, business rules, data decisions, acceptance criteria, and Definition of Done.
+- `tests.md` - planned tests and acceptance-criterion traceability.
+- `ui-spec.md` - screen behavior, feedback, responsive rules, and accessibility.
+- `api-spec.md` - endpoint, authorization, validation, dashboard, and conflict contracts.
+- `reviewer.md` - peer-review and PR evidence record.
+- `ai-use.md` - selected AI prompts and reflection.
+
+The Lab 4 scope includes multiple Actions Taken per Ticket, backend-authoritative authorization, Ticket workflow and resolution rules, Requester and Staff dashboards, migration-safe seed data, responsive/accessibility behavior, and Lab 1-3 regression. SLA clocks, external notifications, inventory, billing, advanced BI, multi-tenant operations, and other unapproved features are excluded.
+
+## Lab 4 branch workflow
+
+`main` remains unchanged while Lab 4 is developed. The integration baseline is `lab4-staging`, created from `main`. Create each issue branch from the latest `lab4-staging`, push the completed issue branch, and open a PR targeting `lab4-staging`. A peer reviews and merges the PR. Only after all Lab 4 issues pass final verification should `lab4-staging` be integrated into `main`.
+
+~~~text
+main
+`-- lab4-staging
+    |-- feature/lab4-01-docs-test-planning
+    |-- feature/lab4-02-actions-taken-backend
+    |-- feature/lab4-03-actions-taken-ui
+    |-- feature/lab4-04-workflow-dashboards
+    |-- feature/lab4-05-regression-responsive-visual-qa
+    `-- feature/lab4-06-integration-submission-release
+~~~
+
+Issue 5 is the current QA increment on `feature/lab4-05-regression-responsive-visual-qa`. Its dedicated Lab 4 API, component, E2E, responsive, and performance checks are included in this branch. Later issue branches should be created from the updated `lab4-staging` after the preceding issue has been merged.
+
+## Lab 4 test and migration commands
+
+From `server/`, apply migrations and seed the database:
+
+~~~powershell
+npx prisma migrate deploy
+npm run prisma:seed
+npm test
+npm run build
+~~~
+
+From `client/`, run the client checks:
+
+~~~powershell
+npm test -- --run
+npm run build
+~~~
+
+From the repository root, run E2E tests with PostgreSQL available:
+
+~~~powershell
+npm run test:e2e
+~~~
+
+The Lab 4 test coverage includes:
+
+- `server/tests/lab-04/actions-taken.api.test.ts` for Actions Taken authorization, validation, idempotency, and lifecycle behavior.
+- `server/tests/lab-04/workflow-dashboards.api.test.ts` for workflow/dashboard API behavior and dashboard authorization.
+- `server/tests/lab-04/performance-smoke.test.ts` for health, dashboard, and Ticket detail response smoke checks.
+- `client/tests/lab-04/ActionsTakenPanel.test.tsx` and `client/tests/lab-04/TicketWorkflow.test.tsx` for Actions Taken and workflow UI behavior.
+- `client/tests/lab-04/RequesterDashboard.test.tsx`, `StaffDashboard.test.tsx`, and `Dashboard.test.tsx` for dashboard metrics, empty states, and drill-down controls.
+- `e2e/lab-04/dashboards.spec.ts` for dashboard flows and responsive desktop/tablet/mobile checks.
+
+The final Lab 4 evidence must also show migration/seed behavior, full regression, accessibility/visual inspection, peer review, and final branch integration.
+
+## Historical Lab 2 branch workflow
 
 ~~~text
 feature/lab2-01-specification-test-plan

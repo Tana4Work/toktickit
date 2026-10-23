@@ -33,7 +33,7 @@ afterAll(async () => {
 
 describe("Requester Lab 2 regression under authenticated ownership", () => {
   it("lists and opens the authenticated Requester's Ticket with attachment metadata", async () => {
-    const list = await request(app).get("/api/tickets").set("Authorization", `Bearer ${requesterToken}`);
+    const list = await request(app).get("/api/tickets?search=Cannot%20download%20the%20submitted%20report").set("Authorization", `Bearer ${requesterToken}`);
     expect(list.status).toBe(200);
     expect(list.body.data.some((item: { id: number }) => item.id === ticketId)).toBe(true);
 

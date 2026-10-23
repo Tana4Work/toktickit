@@ -49,21 +49,23 @@ enum UserRole {
 }
 
 model User {
-  id                    Int          @id @default(autoincrement())
+  id                    Int             @id @default(autoincrement())
   name                  String
-  email                 String       @unique
+  email                 String          @unique
   passwordHash          String
   role                  UserRole
-  active                Boolean      @default(true)
-  mustChangePassword    Boolean      @default(true)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-  requesterTickets      Ticket[]     @relation("RequesterUserTickets")
-  ownedTickets          Ticket[]     @relation("TicketOwner")
+  active                Boolean         @default(true)
+  mustChangePassword    Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  requesterTickets      Ticket[]        @relation("RequesterUserTickets")
+  ownedTickets          Ticket[]        @relation("TicketOwner")
   sessions              Session[]
   authoredComments      PublicComment[] @relation("PublicCommentAuthor")
-  authoredNotes         InternalNote[] @relation("InternalNoteAuthor")
-  resolutionIndications Ticket[]     @relation("ResolutionIndication")
+  authoredNotes         InternalNote[]  @relation("InternalNoteAuthor")
+  performedActions      ActionTaken[]   @relation("ActionPerformedBy")
+  assignedActions       ActionTaken[]   @relation("ActionAssignedTo")
+  resolutionIndications Ticket[]        @relation("ResolutionIndication")
 
   @@index([role, active])
 }
@@ -80,34 +82,35 @@ model Session {
 }
 
 model Ticket {
-  id                 Int                  @id @default(autoincrement())
-  ticketNumber       String               @unique
-  ticketDate         DateTime             @default(now())
-  summary            String
-  description        String
-  requestedPriority  TicketPriority
-  currentStatus      TicketStatus         @default(New)
-  idempotencyKey     String               @unique
-  requestFingerprint String
-  categoryId         Int
-  requesterId        Int
-  requesterUserId    Int?
-  problemAppearsResolvedAt DateTime?
+  id                         Int                  @id @default(autoincrement())
+  ticketNumber               String               @unique
+  ticketDate                 DateTime             @default(now())
+  summary                    String
+  description                String
+  requestedPriority          TicketPriority
+  currentStatus              TicketStatus         @default(New)
+  idempotencyKey             String               @unique
+  requestFingerprint         String
+  categoryId                 Int
+  requesterId                Int
+  requesterUserId            Int?
+  problemAppearsResolvedAt   DateTime?
   problemAppearsResolvedById Int?
-  ownerId            Int?
-  itPriority         TicketPriority @default(MEDIUM)
-  relatedSystemId    Int
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  category           Category             @relation(fields: [categoryId], references: [id])
-  requester          DevelopmentRequester @relation(fields: [requesterId], references: [id])
-  requesterUser      User?                @relation("RequesterUserTickets", fields: [requesterUserId], references: [id], onDelete: SetNull)
-  problemAppearsResolvedBy User?          @relation("ResolutionIndication", fields: [problemAppearsResolvedById], references: [id], onDelete: SetNull)
-  owner              User?                @relation("TicketOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  relatedSystem      RelatedSystem        @relation(fields: [relatedSystemId], references: [id])
-  attachments        Attachment[]
-  publicComments     PublicComment[]
-  internalNotes      InternalNote[]
+  ownerId                    Int?
+  itPriority                 TicketPriority       @default(MEDIUM)
+  relatedSystemId            Int
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+  category                   Category             @relation(fields: [categoryId], references: [id])
+  requester                  DevelopmentRequester @relation(fields: [requesterId], references: [id])
+  requesterUser              User?                @relation("RequesterUserTickets", fields: [requesterUserId], references: [id], onDelete: SetNull)
+  problemAppearsResolvedBy   User?                @relation("ResolutionIndication", fields: [problemAppearsResolvedById], references: [id], onDelete: SetNull)
+  owner                      User?                @relation("TicketOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  relatedSystem              RelatedSystem        @relation(fields: [relatedSystemId], references: [id])
+  attachments                Attachment[]
+  publicComments             PublicComment[]
+  internalNotes              InternalNote[]
+  actionsTaken               ActionTaken[]
 
   @@index([requesterUserId, updatedAt])
   @@index([ownerId, currentStatus, itPriority, updatedAt])
@@ -137,17 +140,44 @@ model InternalNote {
   @@index([ticketId, createdAt])
 }
 
+model ActionTaken {
+  id               Int          @id @default(autoincrement())
+  ticketId         Int
+  actionDateTime   DateTime
+  description      String
+  result           String
+  performedById    Int
+  assignedToId     Int?
+  followUpRequired Boolean      @default(false)
+  followUpNote     String?
+  attachmentNotes  String?
+  status           ActionStatus @default(Planned)
+  version          Int          @default(1)
+  idempotencyKey   String?      @unique
+  requestFingerprint String?
+  seedKey          String?      @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  ticket           Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  performedBy      User         @relation("ActionPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+  assignedTo       User?        @relation("ActionAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, actionDateTime, id])
+  @@index([performedById, createdAt])
+  @@index([assignedToId, status, updatedAt])
+}
+
 model Attachment {
-  id             Int       @id @default(autoincrement())
-  ticketId       Int
-  originalName   String
-  storageKey     String
-  mimeType       String
-  sizeBytes      Int
-  createdAt      DateTime  @default(now())
-  removedAt      DateTime?
-  removalReason  String?
-  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id            Int       @id @default(autoincrement())
+  ticketId      Int
+  originalName  String
+  storageKey    String
+  mimeType      String
+  sizeBytes     Int
+  createdAt     DateTime  @default(now())
+  removedAt     DateTime?
+  removalReason String?
+  ticket        Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, removedAt])
 }
@@ -167,6 +197,13 @@ enum TicketStatus {
   Resolved
   Closed
   Reopened
+  Cancelled
+}
+
+enum ActionStatus {
+  Planned
+  InProgress
+  Completed
   Cancelled
 }
 

@@ -12,6 +12,8 @@ test("IT Staff can complete first login and reach the ticket queue", async ({ pa
     await page.getByLabel("Confirm new password").fill("Lab3StaffE2e123!");
     await page.getByRole("button", { name: "Continue" }).click();
   }
+  await expect(page.getByRole("heading", { name: "Staff Dashboard" })).toBeVisible();
+  await page.getByRole("button", { name: "My Queue" }).click();
   await expect(page.getByRole("heading", { name: "My Queue" })).toBeVisible();
   await expect(page.getByLabel("Search tickets")).toBeVisible();
 });

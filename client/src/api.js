@@ -140,12 +140,20 @@ export async function indicateProblemResolved(ticketId) {
 export async function fetchStaffTickets(params = new URLSearchParams()) {
     return fetchJson(`/api/staff/tickets?${params.toString()}`);
 }
+export function fetchRequesterDashboard() { return fetchJson("/api/requester/dashboard"); }
+export function fetchStaffDashboard() { return fetchJson("/api/staff/dashboard"); }
 export async function fetchStaffOwners() {
     return fetchJson("/api/staff/owners");
 }
 export async function fetchStaffTicket(ticketId) {
     return fetchJson(`/api/staff/tickets/${ticketId}`);
 }
+export async function fetchActionsTaken(ticketId) { return fetchJson(`/api/tickets/${ticketId}/actions-taken`); }
+async function actionRequest(path, method, body, idempotencyKey) { const response = await fetch(`${API_URL}${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}`, ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok)
+    throw new Error(errorMessage(payload, "Unable to update Actions Taken.")); return payload; }
+export function createActionTaken(ticketId, input, idempotencyKey) { return actionRequest(`/api/tickets/${ticketId}/actions-taken`, "POST", input, idempotencyKey); }
+export function updateActionTaken(actionId, version, input) { return actionRequest(`/api/actions-taken/${actionId}`, "PATCH", { ...input, version }); }
+export function updateActionTakenStatus(actionId, version, status) { return actionRequest(`/api/actions-taken/${actionId}/status`, "PATCH", { status, version }); }
 async function patchStaff(path, body) {
     const response = await fetch(`${API_URL}${path}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAuthToken() ?? ""}` }, body: JSON.stringify(body) });
     const payload = await response.json();
